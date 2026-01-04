@@ -1,0 +1,246 @@
+{% extends 'index.html' %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <!-- Header Section -->
+    <div class="row mb-5 align-items-center">
+        <div class="col-lg-8">
+            <h1 class="display-5 fw-bold text-dark mb-2">Cloud Intelligence Dashboard</h1>
+            <p class="text-muted lead">Manage your secure hybrid storage with ML-enhanced deduplication.</p>
+        </div>
+        <div class="col-lg-4 text-lg-end">
+            <a href="/upload" class="btn btn-premium shadow">
+                <i class="bi bi-cloud-arrow-up-fill me-2"></i>New Secure Upload
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between mb-3">
+                    <div class="stat-icon">
+                        <i class="bi bi-files"></i>
+                    </div>
+                    <span class="badge border border-primary text-primary rounded-pill px-3 py-2">Unique</span>
+                </div>
+                <h3 class="fw-bold mb-1">{{ total_files }}</h3>
+                <p class="text-muted small mb-0">Processed Files</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between mb-3">
+                    <div class="stat-icon" style="color: var(--secondary); background: #e8f5e9;">
+                        <i class="bi bi-recycle"></i>
+                    </div>
+                    <span class="badge border border-success text-success rounded-pill px-3 py-2">{{ dedup_rate }}%
+                        Saved</span>
+                </div>
+                <h3 class="fw-bold mb-1">{{ ( (logical_size - physical_size) / 1024 )|round(2) }} KB</h3>
+                <p class="text-muted small mb-0">Total Space Optimized</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between mb-3">
+                    <div class="stat-icon" style="color: #00bcd4; background: #e0f7fa;">
+                        <i class="bi bi-hdd-network"></i>
+                    </div>
+                    <span class="badge border border-info text-info rounded-pill px-3 py-2">Capacity</span>
+                </div>
+                <h3 class="fw-bold mb-1">{{ (logical_size / 1024)|round(2) }} KB</h3>
+                <p class="text-muted small mb-0">Combined Logical Size</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between mb-3">
+                    <div class="stat-icon" style="color: #ff9800; background: #fff3e0;">
+                        <i class="bi bi-cloud-check"></i>
+                    </div>
+                    <span class="badge border border-warning text-warning rounded-pill px-3 py-2">Cloud Sync</span>
+                </div>
+                <h3 class="fw-bold mb-1">{{ (physical_size / 1024)|round(2) }} KB</h3>
+                <p class="text-muted small mb-0">Actual Physical Storage</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Inventory -->
+        <div class="col-lg-9">
+            <div class="glass-card overflow-hidden">
+                <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-grid-3x3-gap me-2"></i>Storage Inventory</h5>
+                    <div class="input-group input-group-sm w-25">
+                        <span class="input-group-text bg-white border-end-0 text-muted"><i
+                                class="bi bi-search"></i></span>
+                        <input type="text" class="form-control border-start-0" placeholder="Search files...">
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table premium-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name & ID</th>
+                                <th>Storage Engine</th>
+                                <th>Size</th>
+                                <th>Fingerprint</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in files %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="bi bi-file-earmark-code text-primary h3 mb-0"></i>
+                                        </div>
+                                        <div class="ms-3">
+                                            <div class="fw-bold">{{ file.file_name }}</div>
+                                            <small class="text-muted">ID: #{{ file.id }} | {{ file.upload_timestamp
+                                                }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if file.stored_path.startswith('s3://') %}
+                                    <span
+                                        class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-3"><i
+                                            class="bi bi-cloud-fill me-1"></i>S3 Bucket</span>
+                                    {% else %}
+                                    <span
+                                        class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3"><i
+                                            class="bi bi-hdd-fill me-1"></i>Local Disk</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="fw-bold">{{ (file.file_size / 1024)|round(2) }} KB</span></td>
+                                <td><code class="text-primary small">{{ file.file_hash[:12] }}...</code></td>
+                                <td class="text-end">
+                                    <div class="dropdown">
+                                        <button class="btn btn-link text-muted p-0" data-bs-toggle="dropdown">
+                                            <i class="bi bi-three-dots-vertical h5"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-2 mt-2">
+                                            {% if current_user.role == 'admin' %}
+                                            <li><a class="dropdown-item py-2" href="/view/{{ file.id }}"><i
+                                                        class="bi bi-download me-2 text-info"></i>Open Original</a></li>
+                                            <li>
+                                                <hr class="dropdown-divider">
+                                            </li>
+                                            {% endif %}
+                                            <li><a class="dropdown-item py-2" href="/audit/{{ file.id }}"><i
+                                                        class="bi bi-shield-check me-2 text-success"></i>Integrity
+                                                    Audit</a></li>
+                                            {% if current_user.role == 'admin' %}
+                                            <li>
+                                                <hr class="dropdown-divider">
+                                            </li>
+                                            <li><button class="dropdown-item py-2" data-bs-toggle="modal"
+                                                    data-bs-target="#renameModal{{ file.id }}"><i
+                                                        class="bi bi-pencil me-2 text-warning"></i>Rename</button></li>
+                                            <li><button class="dropdown-item text-danger py-2" data-bs-toggle="modal"
+                                                    data-bs-target="#deleteModal{{ file.id }}"><i
+                                                        class="bi bi-trash3 me-2"></i>Delete Forever</button></li>
+                                            {% endif %}
+                                        </ul>
+                                    </div>
+
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modals outside the table to prevent UI issues -->
+            {% for file in files %}
+            <!-- Rename Modal -->
+            <div class="modal fade" id="renameModal{{ file.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form action="/rename/{{ file.id }}" method="POST">
+                            <div class="modal-header">
+                                <h5 class="modal-title fw-bold">Rename File</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body text-start">
+                                <label class="text-muted small mb-2">New display name</label>
+                                <input type="text" name="new_name" class="form-control" value="{{ file.file_name }}"
+                                    required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-link text-muted text-decoration-none"
+                                    data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-premium px-4">Update Name</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Modal -->
+            <div class="modal fade" id="deleteModal{{ file.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form action="/delete/{{ file.id }}" method="POST">
+                            <div class="modal-header">
+                                <h5 class="modal-title fw-bold text-danger"><i
+                                        class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete?</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body text-start">
+                                <p class="text-muted mb-0">Are you sure you want to delete <strong>{{ file.file_name
+                                        }}</strong>? This action cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-link text-muted text-decoration-none"
+                                    data-bs-dismiss="modal">Keep File</button>
+                                <button type="submit" class="btn btn-danger rounded-pill px-4">Yes, Delete</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Sidebar logs -->
+        <div class="col-lg-3">
+            <div class="glass-card">
+                <div class="p-4 border-bottom bg-light">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-activity me-2"></i>Security Logs</h5>
+                </div>
+                <div class="p-0">
+                    <div class="list-group list-group-flush">
+                        {% for log in audit_logs %}
+                        <div class="list-group-item p-3 border-0 border-bottom">
+                            <div class="d-flex align-items-center mb-1">
+                                <div class="flex-shrink-0">
+                                    <div class="stat-icon p-0 w-8 h-8 small {% if log.audit_status == 'Success' %}text-success{% else %}text-danger{% endif %}"
+                                        style="width:32px; height:32px; font-size: 0.9rem; background: #e0f7fa;">
+                                        <i
+                                            class="bi bi-{% if log.audit_status == 'Success' %}shield-check{% else %}shield-exclamation{% endif %}"></i>
+                                    </div>
+                                </div>
+                                <div class="ms-2">
+                                    <div class="small fw-bold">{{ log.file_name }}</div>
+                                    <small class="text-muted">{{ log.timestamp.split(' ')[1] }}</small>
+                                </div>
+                            </div>
+                            <p class="mb-0 small text-muted lh-sm">{{ log.message }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

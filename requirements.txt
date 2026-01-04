@@ -1,0 +1,10 @@
+flask
+scikit-learn
+cryptography
+pandas
+numpy
+flask-sqlalchemy
+werkzeug
+boto3
+flask-login
+python-dotenv

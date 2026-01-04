@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Secure Cloud Deduplication{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-chart-line"></i> Performance Dashboard</h2>
+
+<!-- System Overview -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-center bg-primary text-white">
+            <div class="card-body">
+                <h3>{{ system_overview.users }}</h3>
+                <p>Total Users</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-success text-white">
+            <div class="card-body">
+                <h3>{{ system_overview.unique_files }}</h3>
+                <p>Unique Files</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-info text-white">
+            <div class="card-body">
+                <h3>{{ system_overview.total_uploads }}</h3>
+                <p>Total Uploads</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-warning text-white">
+            <div class="card-body">
+                <h3>{{ "%.2f"|format(system_overview.total_storage_mb) }} MB</h3>
+                <p>Storage Used</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Deduplication Stats -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-copy"></i> Deduplication Statistics</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <td>Total Uploads:</td>
+                        <td><strong>{{ dedup_stats.total_uploads }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Duplicates Detected:</td>
+                        <td><strong>{{ dedup_stats.duplicates_detected }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Space Saved:</td>
+                        <td><strong>{{ "%.2f"|format(dedup_stats.space_saved_mb) }} MB</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Deduplication Ratio:</td>
+                        <td><strong>{{ dedup_stats.deduplication_ratio }}%</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-lock"></i> Encryption Performance</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <td>Total Encryptions:</td>
+                        <td><strong>{{ encryption_stats.total_encryptions }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Optimized:</td>
+                        <td><strong>{{ encryption_stats.optimized_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Traditional:</td>
+                        <td><strong>{{ encryption_stats.traditional_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Speedup Factor:</td>
+                        <td><strong>{{ "%.2f"|format(encryption_stats.speedup) }}x</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bloom Filter & Cache Stats -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Bloom Filter</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <td>Items:</td>
+                        <td><strong>{{ bloom_filter_stats.item_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Fill Ratio:</td>
+                        <td><strong>{{ bloom_filter_stats.fill_ratio }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>False Positive Rate:</td>
+                        <td><strong>{{ bloom_filter_stats.false_positive_rate }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-database"></i> Cache Performance</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <td>Cache Size:</td>
+                        <td><strong>{{ cache_stats.size }} / {{ cache_stats.max_size }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Hits:</td>
+                        <td><strong>{{ cache_stats.hits }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Misses:</td>
+                        <td><strong>{{ cache_stats.misses }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Hit Rate:</td>
+                        <td><strong>{{ cache_stats.hit_rate }}%</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Stats -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-upload"></i> Recent Upload Activity (Last 24 Hours)</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <td>Total Uploads:</td>
+                        <td><strong>{{ upload_stats.total_uploads }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Average Upload Time:</td>
+                        <td><strong>{{ "%.2f"|format(upload_stats.average_time_ms) }} ms</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Duplicates:</td>
+                        <td><strong>{{ upload_stats.duplicates }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Deduplication Rate:</td>
+                        <td><strong>{{ "%.2f"|format(upload_stats.dedup_rate) }}%</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./storage:/app/storage
+      - ./database:/app/database
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=development
+      - USE_S3=False
+    command: python run.py
+
+  # Optional: Redis for caching (if needed in future)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"

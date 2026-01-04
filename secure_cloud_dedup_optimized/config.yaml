@@ -1,0 +1,63 @@
+# System Configuration
+system:
+  name: "Secure Cloud Deduplication System"
+  version: "1.0.0"
+  environment: "development"
+
+# Performance Tuning
+performance:
+  chunk_size: 4096
+  parallel_workers: 4
+  enable_compression: true
+  block_size: 4096
+  use_variable_blocks: false
+
+# Bloom Filter Settings
+bloom_filter:
+  size: 1000000
+  hash_count: 7
+  false_positive_rate: 0.01
+  compression_level: 6
+
+# Proof of Work Settings
+pow:
+  difficulty: 4
+  adaptive: true
+  min_difficulty: 2
+  max_difficulty: 6
+
+# Cache Settings
+cache:
+  enabled: true
+  max_size: 1000
+  ttl: 3600
+
+# Upload Settings
+upload:
+  max_size_mb: 100
+  allowed_extensions:
+    - txt
+    - pdf
+    - png
+    - jpg
+    - jpeg
+    - gif
+    - doc
+    - docx
+    - zip
+    - csv
+    - json
+
+# Cloud Storage Settings
+cloud:
+  simulate_latency: true
+  simulate_bandwidth: true
+  base_latency_ms: 50
+  latency_variance_ms: 20
+  bandwidth_mbps: 10
+
+# Monitoring Settings
+monitoring:
+  enable_realtime: true
+  metrics_retention_hours: 168  # 7 days
+  performance_report_interval_hours: 24

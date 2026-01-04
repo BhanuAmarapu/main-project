@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Upload File - Secure Cloud Deduplication{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-upload"></i> Upload File</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data" id="uploadForm">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select File</label>
+                        <input type="file" class="form-control" id="file" name="file" required>
+                        <div class="form-text">Maximum file size: 100MB</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="use_optimized" name="use_optimized"
+                                value="true" checked>
+                            <label class="form-check-label" for="use_optimized">
+                                Use Optimized Encryption (2-3x faster)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="progress" style="display: none;" id="uploadProgress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="uploadBtn">
+                        <i class="fas fa-upload"></i> Upload File
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> How It Works</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li><strong>Upload:</strong> Select and upload your file</li>
+                    <li><strong>Hash:</strong> System calculates file hash</li>
+                    <li><strong>Deduplication:</strong> Checks for duplicates using Bloom filter</li>
+                    <li><strong>Encryption:</strong> Encrypts file with convergent encryption</li>
+                    <li><strong>Storage:</strong> Stores in cloud or local storage</li>
+                </ol>
+                <p class="mb-0"><strong>Note:</strong> If a duplicate is detected, the system will reference the
+                    existing file, saving storage space!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('uploadForm').addEventListener('submit', function () {
+        document.getElementById('uploadProgress').style.display = 'block';
+        document.getElementById('uploadBtn').disabled = true;
+
+        // Simulate progress (in real app, use AJAX with progress tracking)
+        let progress = 0;
+        const interval = setInterval(function () {
+            progress += 10;
+            document.querySelector('.progress-bar').style.width = progress + '%';
+            if (progress >= 90) {
+                clearInterval(interval);
+            }
+        }, 200);
+    });
+</script>
+{% endblock %}
