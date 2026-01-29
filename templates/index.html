@@ -29,6 +29,15 @@
                     {% if current_user.is_authenticated %}
                     <a class="nav-link mx-2" href="/upload">Secure Upload</a>
                     <a class="nav-link mx-2" href="/dashboard">Dashboard</a>
+                    {% if current_user.role == 'admin' %}
+                    <a class="nav-link mx-2 position-relative" href="/alerts">
+                        <i class="bi bi-shield-exclamation"></i> Security Alerts
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                            id="alertBadge" style="font-size: 0.65rem;">
+                            0
+                        </span>
+                    </a>
+                    {% endif %}
                     <div class="nav-item dropdown ms-lg-3">
                         <a class="nav-link dropdown-toggle btn-premium py-2 px-4 text-white" href="#" id="userDropdown"
                             role="button" data-bs-toggle="dropdown">
@@ -181,6 +190,23 @@
             transition: color 0.3s;
         }
     </style>
+    <script>
+        // Update alert badge count for admin users
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        fetch('/api/activity-stats')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('alertBadge');
+                if (badge && data.alert_count !== undefined) {
+                    badge.textContent = data.alert_count;
+                    if (data.alert_count === 0) {
+                        badge.style.display = 'none';
+                    }
+                }
+            })
+            .catch(err => console.error('Failed to fetch alert count:', err));
+        {% endif %}
+    </script>
 </body>
 
 </html>

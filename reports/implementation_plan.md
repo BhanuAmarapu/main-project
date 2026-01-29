@@ -8,7 +8,7 @@ Building a complete system for secure cloud data deduplication with ML-based pre
 Refine logic and remove branding.
 
 #### [MODIFY] [config.py](file:///c:/Users/amara/OneDrive/Desktop/Hybrid%20ML-CNS%20Dedupliation%20System/config.py)
-- Change `SECRET_KEY` default value to remove "anti-gravity".
+- Change `SECRET_KEY` default value to remove "Bhnu@2004".
 - Ensure all paths are correctly configured.
 
 #### [MODIFY] [app.py](file:///c:/Users/amara/OneDrive/Desktop/Hybrid%20ML-CNS%20Dedupliation%20System/app.py)
@@ -23,7 +23,7 @@ Refine logic and remove branding.
 Update aesthetics and remove branding.
 
 #### [MODIFY] [index.html](file:///c:/Users/amara/OneDrive/Desktop/Hybrid%20ML-CNS%20Dedupliation%20System/templates/index.html)
-- Remove "Anti-Gravity" branding from navbar and footer.
+- Remove project code-name branding from navbar and footer.
 - Apply more "premium" styling (dark mode support, vibrant accent colors, better typography).
 
 #### [MODIFY] [upload.html](file:///c:/Users/amara/OneDrive/Desktop/Hybrid%20ML-CNS%20Dedupliation%20System/templates/upload.html)

@@ -39,3 +39,26 @@ CREATE TABLE IF NOT EXISTS logs (
     details TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS suspicious_activities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    activity_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    description TEXT,
+    details TEXT,
+    is_dismissed INTEGER DEFAULT 0,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS user_activity_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    upload_count INTEGER DEFAULT 0,
+    duplicate_count INTEGER DEFAULT 0,
+    pow_failure_count INTEGER DEFAULT 0,
+    last_upload_time DATETIME,
+    window_start DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);

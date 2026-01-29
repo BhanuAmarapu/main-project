@@ -68,7 +68,107 @@
         </div>
     </div>
 
+    <!-- ML & AES Workflow Visualization -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="glass-card p-4">
+                <h5 class="mb-4 fw-bold"><i class="bi bi-diagram-3 me-2"></i>File Processing Workflow</h5>
+                <div class="workflow-container">
+                    <div class="workflow-step">
+                        <div class="workflow-icon"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <i class="bi bi-cloud-upload-fill text-white"></i>
+                        </div>
+                        <h6 class="mt-3 fw-bold">1. Upload</h6>
+                        <p class="small text-muted mb-0">File received from user</p>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="bi bi-arrow-right text-primary"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="workflow-icon"
+                            style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <i class="bi bi-cpu-fill text-white"></i>
+                        </div>
+                        <h6 class="mt-3 fw-bold">2. ML Prediction</h6>
+                        <p class="small text-muted mb-0">AI analyzes duplicate probability</p>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="bi bi-arrow-right text-primary"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="workflow-icon"
+                            style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <i class="bi bi-fingerprint text-white"></i>
+                        </div>
+                        <h6 class="mt-3 fw-bold">3. Hash Check</h6>
+                        <p class="small text-muted mb-0">SHA-256 deduplication</p>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="bi bi-arrow-right text-primary"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="workflow-icon"
+                            style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                            <i class="bi bi-shield-lock-fill text-white"></i>
+                        </div>
+                        <h6 class="mt-3 fw-bold">4. AES-256 Encryption</h6>
+                        <p class="small text-muted mb-0">Convergent encryption applied</p>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="bi bi-arrow-right text-primary"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="workflow-icon"
+                            style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                            <i class="bi bi-hdd-network-fill text-white"></i>
+                        </div>
+                        <h6 class="mt-3 fw-bold">5. Storage</h6>
+                        <p class="small text-muted mb-0">Saved to S3/Local</p>
+                    </div>
+                </div>
+
+                <!-- Workflow Details -->
+                <div class="row mt-4 pt-4 border-top">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-robot me-2 text-primary"></i>ML Prediction Engine
+                            </h6>
+                            <ul class="small mb-0">
+                                <li>Decision Tree Classifier</li>
+                                <li>Features: File size, extension, upload frequency</li>
+                                <li>Predicts duplicate likelihood before hashing</li>
+                                <li>Optimizes processing for unique files</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-lock-fill me-2 text-success"></i>AES-256 CNS
+                                Encryption</h6>
+                            <ul class="small mb-0">
+                                <li>Convergent Narrowing Storage (CNS)</li>
+                                <li>Keys derived from file content hash</li>
+                                <li>Identical files → Identical ciphertext</li>
+                                <li>Enables secure deduplication</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
+
         <!-- Main Inventory -->
         <div class="col-lg-9">
             <div class="glass-card overflow-hidden">

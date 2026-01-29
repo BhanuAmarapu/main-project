@@ -16,7 +16,7 @@ The complete system for ML-Assisted Lightweight Secure Data Deduplication is now
 - **Cloud Analytics**: Real-time storage stats and deduplication rates on the dashboard.
 - **Secure Uploads**: Automated encryption and deduplication during ingestion.
 - **Audit Trails**: Detailed logs for all storage and integrity events.
-- **Zero Branding**: All internal project code names ("Anti-Gravity") have been removed as requested.
+- **Zero Branding**: All internal project code names ("BHanu@2004") have been removed as requested.
 
 ## How to Verify
 

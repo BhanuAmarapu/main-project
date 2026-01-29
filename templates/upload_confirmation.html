@@ -1,0 +1,154 @@
+{% extends 'index.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- ML Alert Card -->
+            <div class="glass-card p-4 mb-4">
+                <div class="text-center mb-4">
+                    <div class="alert-icon mx-auto mb-3"
+                        style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-exclamation-triangle-fill text-white" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h3 class="fw-bold mb-2">⚠️ Potential Duplicate Detected</h3>
+                    <p class="text-muted">ML Prediction Engine has analyzed your file</p>
+                </div>
+
+                <!-- ML Analysis Results -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded text-center">
+                            <i class="bi bi-robot text-primary" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2 mb-1 fw-bold">ML Confidence</h6>
+                            <span class="badge bg-{{ 'danger' if ml_confidence == 'High' else 'warning' }} px-3 py-2">
+                                {{ ml_confidence }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded text-center">
+                            <i class="bi bi-file-earmark text-info" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2 mb-1 fw-bold">File Size</h6>
+                            <p class="mb-0">{{ (file_size / 1024)|round(2) }} KB</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Info -->
+                <div class="alert alert-info border-0">
+                    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>Uploading:</h6>
+                    <p class="mb-0"><strong>{{ filename }}</strong></p>
+                </div>
+            </div>
+
+            <!-- Similar Files Found -->
+            {% if similar_files %}
+            <div class="glass-card p-4 mb-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-files me-2 text-warning"></i>
+                    Similar Files Found ({{ similar_files|length }})
+                </h5>
+                <p class="text-muted small mb-3">These files have similar names or sizes in the system:</p>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>File Name</th>
+                                <th>Size</th>
+                                <th>Uploaded</th>
+                                <th>Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in similar_files %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-earmark-fill text-primary me-2"></i>
+                                    <strong>{{ file.file_name }}</strong>
+                                </td>
+                                <td>{{ (file.file_size / 1024)|round(2) }} KB</td>
+                                <td><small class="text-muted">{{ file.upload_timestamp }}</small></td>
+                                <td><code class="small">{{ file.file_hash[:12] }}...</code></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Decision Card -->
+            <div class="glass-card p-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-question-circle me-2"></i>
+                    What would you like to do?
+                </h5>
+
+                <form method="POST" action="{{ url_for('confirm_upload') }}">
+                    <input type="hidden" name="filename" value="{{ filename }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <button type="submit" name="action" value="store" class="btn btn-success w-100 py-3 shadow">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                <strong>Store Anyway</strong>
+                                <p class="mb-0 small mt-1">Upload and encrypt this file</p>
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="submit" name="action" value="skip" class="btn btn-outline-danger w-100 py-3">
+                                <i class="bi bi-x-circle-fill me-2"></i>
+                                <strong>Don't Store</strong>
+                                <p class="mb-0 small mt-1">Cancel this upload</p>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="alert alert-warning border-0 mt-4 mb-0">
+                    <small>
+                        <i class="bi bi-lightbulb-fill me-2"></i>
+                        <strong>Tip:</strong> If this is truly a duplicate, choosing "Don't Store" will save storage
+                        space and processing time.
+                    </small>
+                </div>
+            </div>
+
+            <!-- Back Link -->
+            <div class="text-center mt-4">
+                <a href="{{ url_for('upload_file') }}" class="text-muted">
+                    <i class="bi bi-arrow-left me-1"></i> Upload a different file
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .alert-icon {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    .btn {
+        transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}

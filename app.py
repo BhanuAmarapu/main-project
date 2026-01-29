@@ -8,6 +8,7 @@ from ml_model import MLModel, get_ext_code
 from dedup import Deduplicator
 from auditing import Auditor
 from utils import log_action
+from suspicious_upload_detector import SuspiciousUploadDetector
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -17,6 +18,7 @@ app.secret_key = Config.SECRET_KEY
 ml_model = MLModel()
 deduplicator = Deduplicator()
 auditor = Auditor()
+suspicious_detector = SuspiciousUploadDetector()
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -102,12 +104,26 @@ def upload_file():
             temp_path = os.path.join(app.config['UPLOAD_TEMP'], filename)
             file.save(temp_path)
             
-            # Step 1: ML Prediction
+            # Step 1: ML Prediction (instant analysis)
             file_size = os.path.getsize(temp_path)
             ext_code = get_ext_code(filename)
             
+            # Open database connection for all queries
             conn = get_db_connection()
+            
+            # Get frequency
             freq = conn.execute("SELECT COUNT(*) FROM files WHERE file_name = ?", (filename,)).fetchone()[0]
+            
+            # Find similar files based on metadata
+            similar_files = conn.execute("""
+                SELECT id, file_name, file_size, file_hash, upload_timestamp 
+                FROM files 
+                WHERE file_name = ? OR (file_size BETWEEN ? AND ? AND file_type = ?)
+                ORDER BY upload_timestamp DESC
+                LIMIT 5
+            """, (filename, file_size - 1024, file_size + 1024, filename.split('.')[-1])).fetchall()
+            
+            # Close connection after all queries
             conn.close()
             
             prediction = ml_model.predict({
@@ -116,8 +132,39 @@ def upload_file():
                 'frequency': freq + 1
             })
             
-            # Step 2: Deduplication
+            # If ML predicts duplicate, show confirmation page
+            if prediction == 1 or freq > 0:
+                return render_template('upload_confirmation.html',
+                                     filename=filename,
+                                     temp_path=temp_path,
+                                     file_size=file_size,
+                                     prediction=prediction,
+                                     similar_files=similar_files,
+                                     ml_confidence="High" if prediction == 1 else "Medium")
+
+            
+            # Step 2: Deduplication (if user confirms or no duplicates predicted)
             is_duplicate, file_id = deduplicator.process_file(temp_path, filename, current_user.id)
+            
+            # Step 3: Suspicious Activity Detection
+            if Config.ENABLE_SUSPICIOUS_DETECTOR:
+                # Track rapid uploads
+                is_rapid, rapid_msg = suspicious_detector.track_upload(current_user.id)
+                if is_rapid and rapid_msg:
+                    flash(rapid_msg, 'warning')
+                
+                # Track duplicate attempts if this is a duplicate
+                if is_duplicate:
+                    # Get file hash from database
+                    temp_conn = get_db_connection()
+                    file_hash_row = temp_conn.execute("SELECT file_hash FROM files WHERE id = ?", (file_id,)).fetchone()
+                    temp_conn.close()
+                    
+                    if file_hash_row:
+                        is_excessive, dup_msg = suspicious_detector.track_duplicate_attempt(current_user.id, file_hash_row[0])
+                        if is_excessive and dup_msg:
+                            flash(dup_msg, 'danger')
+
             
             if is_duplicate:
                 flash(f"DUPLICATE ALERT: An identical file was already found in the system. Redirecting for access mapping.")
@@ -133,6 +180,55 @@ def upload_file():
                                    file_id=file_id)
             
     return render_template('upload.html')
+
+@app.route('/confirm_upload', methods=['POST'])
+@login_required
+def confirm_upload():
+    """Handle user's decision to store or skip the file"""
+    action = request.form.get('action')
+    filename = request.form.get('filename')
+    
+    if action == 'skip':
+        flash(f'Upload cancelled. File "{filename}" was not stored.', 'info')
+        return redirect(url_for('upload_file'))
+    
+    # User chose to store - process the file
+    temp_path = os.path.join(app.config['UPLOAD_TEMP'], filename)
+    
+    if not os.path.exists(temp_path):
+        flash('File not found. Please upload again.', 'danger')
+        return redirect(url_for('upload_file'))
+    
+    # Process the file
+    is_duplicate, file_id = deduplicator.process_file(temp_path, filename, current_user.id)
+    
+    # Track suspicious activity
+    if Config.ENABLE_SUSPICIOUS_DETECTOR:
+        is_rapid, rapid_msg = suspicious_detector.track_upload(current_user.id)
+        if is_rapid and rapid_msg:
+            flash(rapid_msg, 'warning')
+        
+        if is_duplicate:
+            temp_conn = get_db_connection()
+            file_hash_row = temp_conn.execute("SELECT file_hash FROM files WHERE id = ?", (file_id,)).fetchone()
+            temp_conn.close()
+            
+            if file_hash_row:
+                is_excessive, dup_msg = suspicious_detector.track_duplicate_attempt(current_user.id, file_hash_row[0])
+                if is_excessive and dup_msg:
+                    flash(dup_msg, 'danger')
+    
+    if is_duplicate:
+        flash(f"File stored successfully! Duplicate detected - linked to existing file.", 'success')
+    else:
+        flash(f'File "{filename}" uploaded and encrypted successfully!', 'success')
+    
+    # Clean up temp file
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+    
+    return redirect(url_for('dashboard'))
+
 
 @app.route('/dashboard')
 @login_required
@@ -317,6 +413,46 @@ def rename_file(file_id):
     
     flash(f"File renamed to '{new_name}'.")
     return redirect(url_for('dashboard'))
+
+@app.route('/alerts')
+@login_required
+def alerts():
+    if current_user.role != 'admin':
+        flash('Permission denied. Admin access required.')
+        return redirect(url_for('dashboard'))
+    
+    include_dismissed = request.args.get('dismissed', 'false').lower() == 'true'
+    all_alerts = suspicious_detector.get_all_alerts(include_dismissed=include_dismissed)
+    
+    return render_template('alerts.html', alerts=all_alerts, include_dismissed=include_dismissed)
+
+@app.route('/alerts/<int:alert_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_alert(alert_id):
+    if current_user.role != 'admin':
+        flash('Permission denied.')
+        return redirect(url_for('dashboard'))
+    
+    suspicious_detector.dismiss_alert(alert_id)
+    flash('Alert dismissed successfully.')
+    return redirect(url_for('alerts'))
+
+@app.route('/api/activity-stats')
+@login_required
+def activity_stats():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Permission denied'}), 403
+    
+    user_id = request.args.get('user_id', type=int)
+    hours = request.args.get('hours', default=24, type=int)
+    
+    if user_id:
+        stats = suspicious_detector.get_user_stats(user_id, hours)
+        return jsonify(stats)
+    else:
+        # Return overall stats
+        alert_count = suspicious_detector.get_alert_count()
+        return jsonify({'alert_count': alert_count})
 
 if __name__ == '__main__':
     print("=" * 60)

@@ -150,3 +150,73 @@ footer {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.2rem rgba(0, 210, 255, 0.25);
 }
+
+/* Workflow Visualization Styles */
+.workflow-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.workflow-step {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.workflow-step:hover {
+    transform: translateY(-5px);
+}
+
+.workflow-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-size: 1.8rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.workflow-step:hover .workflow-icon {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.workflow-arrow {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.workflow-step h6 {
+    font-size: 0.95rem;
+    margin-top: 15px;
+    color: #333;
+}
+
+.workflow-step p {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+@media (max-width: 768px) {
+    .workflow-container {
+        flex-direction: column;
+    }
+
+    .workflow-arrow {
+        transform: rotate(90deg);
+        margin: 10px 0;
+    }
+
+    .workflow-step {
+        width: 100%;
+    }
+}

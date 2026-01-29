@@ -47,6 +47,22 @@ class Config:
     if USE_S3 and (not AWS_ACCESS_KEY or not AWS_SECRET_KEY):
         print("WARNING: USE_S3 is True but AWS credentials are missing. S3 will be disabled.")
         USE_S3 = False
+    
+    # Suspicious Upload Detector Configuration
+    ENABLE_SUSPICIOUS_DETECTOR = os.getenv('ENABLE_SUSPICIOUS_DETECTOR', 'False').lower() == 'true'  # Temporarily disabled
+
+    
+    # Rapid upload detection
+    RAPID_UPLOAD_THRESHOLD = int(os.getenv('RAPID_UPLOAD_THRESHOLD', 10))  # uploads
+    RAPID_UPLOAD_WINDOW_MINUTES = int(os.getenv('RAPID_UPLOAD_WINDOW_MINUTES', 1))  # minutes
+    
+    # Duplicate attempt detection
+    DUPLICATE_ATTEMPT_THRESHOLD = int(os.getenv('DUPLICATE_ATTEMPT_THRESHOLD', 5))  # attempts
+    DUPLICATE_ATTEMPT_WINDOW_HOURS = int(os.getenv('DUPLICATE_ATTEMPT_WINDOW_HOURS', 1))  # hours
+    
+    # PoW failure detection
+    POW_FAILURE_THRESHOLD = int(os.getenv('POW_FAILURE_THRESHOLD', 3))  # failures
+    POW_FAILURE_WINDOW_HOURS = int(os.getenv('POW_FAILURE_WINDOW_HOURS', 1))  # hours
 
 # Ensure directories exist
 for folder in [Config.UPLOAD_TEMP, Config.UPLOAD_STORED, Config.LOGS_DIR]:
