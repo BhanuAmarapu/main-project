@@ -5,10 +5,18 @@ Run this file to start the application: python run.py
 import os
 import sys
 
-# Ensure we're in the correct directory
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# CRITICAL: Ensure we're in the correct directory and it's first in Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(current_dir)
 
-# Import the main app
+# Add current directory to the BEGINNING of sys.path to ensure we import the correct app.py
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+print(f"[DEBUG] Working directory: {os.getcwd()}")
+print(f"[DEBUG] Python will import from: {current_dir}")
+
+# Import the main app (now guaranteed to be from current directory)
 from app import app, get_db_connection, ml_model
 from config import Config
 
