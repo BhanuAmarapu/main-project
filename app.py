@@ -703,9 +703,31 @@ if __name__ == '__main__':
     
     print("\n[2/3] Initializing database...")
     try:
-        conn = get_db_connection()
-        conn.close()
-        print("✓ Database connection successful")
+        # Check if database exists and has tables
+        db_needs_init = False
+        
+        if not os.path.exists(Config.DATABASE):
+            print("  Database not found, creating...")
+            db_needs_init = True
+        else:
+            # Check if tables exist
+            try:
+                conn = get_db_connection()
+                cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+                if cursor.fetchone() is None:
+                    print("  Database tables missing, initializing...")
+                    db_needs_init = True
+                conn.close()
+            except Exception:
+                db_needs_init = True
+        
+        # Initialize database if needed
+        if db_needs_init:
+            from init_db import init_db
+            init_db()
+            print("✓ Database initialized successfully")
+        else:
+            print("✓ Database connection successful")
     except Exception as e:
         print(f"✗ Database error: {e}")
         print("  Please run: python init_db.py")
