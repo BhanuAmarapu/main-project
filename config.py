@@ -49,7 +49,7 @@ class Config:
         USE_S3 = False
     
     # Suspicious Upload Detector Configuration
-    ENABLE_SUSPICIOUS_DETECTOR = os.getenv('ENABLE_SUSPICIOUS_DETECTOR', 'False').lower() == 'true'  # Temporarily disabled
+    ENABLE_SUSPICIOUS_DETECTOR = os.getenv('ENABLE_SUSPICIOUS_DETECTOR', 'True').lower() == 'true'  # Enabled for security monitoring
 
     
     # Rapid upload detection

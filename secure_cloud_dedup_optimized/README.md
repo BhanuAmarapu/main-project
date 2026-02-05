@@ -8,7 +8,7 @@ A comprehensive secure cloud deduplication system with ML-assisted duplicate det
 - **ML-Assisted Deduplication**: Machine learning-based duplicate prediction
 - **Convergent Encryption**: Content-based encryption for secure deduplication
 - **Optimized Parallel Encryption**: 2-3x faster encryption through multi-threading
-- **Block-Level Deduplication**: Fixed and variable-size chunking
+- **Block-Level Deduplication**: Fixed and variable-size chunkingwhy
 - **Proof of Ownership (PoW)**: Adaptive difficulty verification
 - **Cloud Storage Integration**: AWS S3 support with local caching
 

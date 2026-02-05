@@ -11,8 +11,8 @@
                 <div class="row g-4">
                     <div class="col-md-6 border-end">
                         <div class="text-center mb-4">
-                            <i class="bi bi-cpu h1 text-primary"></i>
-                            <h4 class="fw-bold">ML Prediction</h4>
+                            <i class="bi bi-file-earmark-check h1 text-primary"></i>
+                            <h4 class="fw-bold">Identical File</h4>
                         </div>
                         <div
                             class="alert {% if prediction == 'Duplicate Likely' %}alert-warning border-warning{% else %}alert-success border-success{% endif %} text-center py-3 rounded-3">
@@ -23,8 +23,8 @@
                     </div>
                     <div class="col-md-6 ps-md-4">
                         <div class="text-center mb-4">
-                            <i class="bi bi-shield-check h1 text-success"></i>
-                            <h4 class="fw-bold">CNS De-duplication</h4>
+                            <i class="bi bi-arrow-repeat h1 text-success"></i>
+                            <h4 class="fw-bold">Readoption</h4>
                         </div>
                         {% if is_duplicate %}
                         <div class="alert alert-info border-info text-center py-3 rounded-3">

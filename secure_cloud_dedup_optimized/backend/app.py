@@ -187,6 +187,17 @@ def upload():
             temp_path = os.path.join(Config.TEMP_DIR, filename)
             file.save(temp_path)
             
+            # Calculate file hash and metadata
+            file_hash = get_file_hash(temp_path)
+            file_size = os.path.getsize(temp_path)
+            file_type = filename.split('.')[-1] if '.' in filename else 'unknown'
+            
+            # Check if this is a forced upload (user clicked "Store Anyway")
+            force_upload = request.form.get('force_upload', 'false') == 'true'
+            
+            # If not forced, the duplicate check happens on client-side
+            # This route only processes actual uploads
+            
             # Process file with deduplication
             use_optimized = request.form.get('use_optimized', 'false') == 'true'
             result = dedup_manager.process_file(temp_path, filename, current_user.id, use_optimized=use_optimized)
@@ -196,7 +207,10 @@ def upload():
                 ownership_manager.grant_ownership(current_user.id, result['file_id'])
                 
                 if result['is_duplicate']:
-                    flash(f'Duplicate file detected! Space saved: {result["space_saved"] / 1024:.2f} KB', 'info')
+                    if force_upload:
+                        flash(f'File stored successfully! This is a duplicate reference. Space saved: {result["space_saved"] / 1024:.2f} KB', 'success')
+                    else:
+                        flash(f'Duplicate file detected! Space saved: {result["space_saved"] / 1024:.2f} KB', 'info')
                 else:
                     flash(f'File uploaded successfully! Processing time: {result["processing_time"]:.2f}s', 'success')
                 
@@ -208,6 +222,92 @@ def upload():
                 flash('Upload failed', 'error')
     
     return render_template('upload.html')
+
+
+@app.route('/api/check_duplicate', methods=['POST'])
+@login_required
+def check_duplicate():
+    """API endpoint to check for duplicate files"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Save to temp directory
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(Config.TEMP_DIR, f"check_{current_user.id}_{filename}")
+        file.save(temp_path)
+        
+        # Calculate file hash and metadata
+        file_hash = get_file_hash(temp_path)
+        file_size = os.path.getsize(temp_path)
+        file_type = filename.split('.')[-1] if '.' in filename else 'unknown'
+        
+        # Check for duplicates with details
+        result = dedup_manager.check_duplicate_with_details(
+            file_hash, filename, file_size, file_type
+        )
+        
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        if result['is_duplicate'] and result['similar_files']:
+            similar_file_data = result['similar_files'][0]  # Get most similar
+            existing_file = similar_file_data['file']
+            similarity = similar_file_data['similarity']
+            match_type = similar_file_data['match_type']
+            
+            return jsonify({
+                'is_duplicate': True,
+                'match_type': match_type,
+                'similarity': similarity,
+                'existing_file': {
+                    'id': existing_file.id,
+                    'name': existing_file.file_name,
+                    'size': existing_file.file_size,
+                    'size_mb': round(existing_file.file_size / (1024 * 1024), 2),
+                    'type': existing_file.file_type,
+                    'upload_date': existing_file.upload_date.strftime('%b %d, %Y'),
+                    'reference_count': existing_file.reference_count
+                }
+            })
+        else:
+            return jsonify({'is_duplicate': False})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/file_details/<int:file_id>')
+@login_required
+def file_details(file_id):
+    """API endpoint to get file details"""
+    try:
+        file = File.query.get_or_404(file_id)
+        
+        # Get upload count
+        upload_count = Upload.query.filter_by(file_id=file_id).count()
+        
+        return jsonify({
+            'id': file.id,
+            'name': file.file_name,
+            'size': file.file_size,
+            'size_mb': round(file.file_size / (1024 * 1024), 2),
+            'type': file.file_type,
+            'upload_date': file.upload_date.strftime('%b %d, %Y %H:%M'),
+            'reference_count': file.reference_count,
+            'upload_count': upload_count,
+            'is_encrypted': file.is_encrypted,
+            'encryption_method': file.encryption_method,
+            'is_in_cloud': file.is_in_cloud
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/files')

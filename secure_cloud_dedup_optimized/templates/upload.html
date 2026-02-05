@@ -34,7 +34,9 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" id="uploadBtn">
+                    <input type="hidden" id="force_upload" name="force_upload" value="false">
+
+                    <button type="button" class="btn btn-primary" id="uploadBtn">
                         <i class="fas fa-upload"></i> Upload File
                     </button>
                 </form>
@@ -49,24 +51,316 @@
             <div class="card-body">
                 <ol>
                     <li><strong>Upload:</strong> Select and upload your file</li>
-                    <li><strong>Hash:</strong> System calculates file hash</li>
+                    <li><strong>Duplicate Check:</strong> System checks for similar files using ML and hash comparison
+                    </li>
                     <li><strong>Deduplication:</strong> Checks for duplicates using Bloom filter</li>
                     <li><strong>Encryption:</strong> Encrypts file with convergent encryption</li>
                     <li><strong>Storage:</strong> Stores in cloud or local storage</li>
                 </ol>
-                <p class="mb-0"><strong>Note:</strong> If a duplicate is detected, the system will reference the
-                    existing file, saving storage space!</p>
+                <p class="mb-0"><strong>Note:</strong> If a duplicate or similar file is detected, you'll see options to
+                    store anyway or skip the upload!</p>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Duplicate Detection Modal -->
+<div class="modal fade" id="duplicateModal" tabindex="-1" aria-labelledby="duplicateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="duplicateModalLabel">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> <span id="modalTitle">Similar File
+                        Detected!</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Detection Info -->
+                <div class="alert alert-info mb-3" id="detectionInfo">
+                    <i class="fas fa-brain"></i> <strong>ML Prediction Engine</strong> has analyzed your file
+                </div>
+
+                <!-- Similarity Badge -->
+                <div class="text-center mb-3">
+                    <div class="similarity-badge" id="similarityBadge">
+                        <span id="similarityPercentage">0%</span>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-secondary" id="matchTypeBadge">Checking...</span>
+                    </div>
+                    <small class="text-muted d-block mt-1" id="matchType">Analyzing...</small>
+                </div>
+
+                <!-- Existing File Details -->
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="fas fa-file"></i> Existing File Details</h6>
+                        <div class="file-details">
+                            <p class="mb-1"><strong>Name:</strong> <span id="existingFileName">-</span></p>
+                            <p class="mb-1"><strong>Size:</strong> <span id="existingFileSize">-</span></p>
+                            <p class="mb-1"><strong>Uploaded:</strong> <span id="existingFileDate">-</span></p>
+                            <p class="mb-0"><strong>References:</strong> <span id="existingFileRefs">-</span> users</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Similarity Breakdown (for ML matches) -->
+                <div class="mt-3" id="similarityBreakdown" style="display: none;">
+                    <h6><i class="fas fa-chart-bar"></i> Similarity Breakdown</h6>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <small>Filename:</small>
+                            <small id="filenameSim">0%</small>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-info" id="filenameBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <small>Size:</small>
+                            <small id="sizeSim">0%</small>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-info" id="sizeBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <small>Type:</small>
+                            <small id="typeSim">0%</small>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-info" id="typeBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" id="skipUploadBtn">
+                    <i class="fas fa-times"></i> Skip Upload
+                </button>
+                <button type="button" class="btn btn-success" id="downloadExistingBtn">
+                    <i class="fas fa-download"></i> Download Existing
+                </button>
+                <button type="button" class="btn btn-info" id="viewExistingBtn">
+                    <i class="fas fa-eye"></i> View in Files
+                </button>
+                <button type="button" class="btn btn-primary" id="storeAnywayBtn">
+                    <i class="fas fa-save"></i> Store Anyway
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .similarity-badge {
+        display: inline-block;
+        padding: 15px 30px;
+        border-radius: 50px;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .similarity-badge.exact-match {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.5);
+        animation: pulse 2s infinite;
+    }
+
+    .similarity-badge.ml-match {
+        background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+        box-shadow: 0 4px 15px rgba(255, 167, 38, 0.5);
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    .file-details p {
+        font-size: 0.9rem;
+    }
+
+    #matchTypeBadge {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+        font-weight: 600;
+    }
+
+    #detectionInfo {
+        border-left: 4px solid;
+        font-size: 0.95rem;
+    }
+
+    #detectionInfo.alert-danger {
+        border-left-color: #dc3545;
+    }
+
+    #detectionInfo.alert-info {
+        border-left-color: #0dcaf0;
+    }
+</style>
+
 <script>
-    document.getElementById('uploadForm').addEventListener('submit', function () {
+    let selectedFile = null;
+    let duplicateData = null;
+
+    document.getElementById('file').addEventListener('change', function (e) {
+        selectedFile = e.target.files[0];
+    });
+
+    document.getElementById('uploadBtn').addEventListener('click', function (e) {
+        e.preventDefault();
+
+        if (!selectedFile) {
+            alert('Please select a file first');
+            return;
+        }
+
+        // Check for duplicates first
+        checkDuplicate();
+    });
+
+    function checkDuplicate() {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        // Show checking status
+        document.getElementById('uploadBtn').disabled = true;
+        document.getElementById('uploadBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+
+        fetch('{{ url_for("check_duplicate") }}', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('uploadBtn').disabled = false;
+                document.getElementById('uploadBtn').innerHTML = '<i class="fas fa-upload"></i> Upload File';
+
+                if (data.is_duplicate) {
+                    // Show duplicate modal
+                    duplicateData = data;
+                    showDuplicateModal(data);
+                } else {
+                    // No duplicate, proceed with upload
+                    proceedWithUpload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('uploadBtn').disabled = false;
+                document.getElementById('uploadBtn').innerHTML = '<i class="fas fa-upload"></i> Upload File';
+                // If check fails, proceed with upload anyway
+                proceedWithUpload();
+            });
+    }
+
+    function showDuplicateModal(data) {
+        const modal = new bootstrap.Modal(document.getElementById('duplicateModal'));
+
+        // Update similarity badge
+        const percentage = Math.round(data.similarity.overall);
+        document.getElementById('similarityPercentage').textContent = percentage + '%';
+
+        const badge = document.getElementById('similarityBadge');
+        const matchTypeBadge = document.getElementById('matchTypeBadge');
+        const detectionInfo = document.getElementById('detectionInfo');
+
+        // Reset badge classes
+        badge.classList.remove('exact-match', 'ml-match');
+
+        if (data.match_type === 'exact_hash') {
+            // Exact hash match - identical file
+            badge.classList.add('exact-match');
+            document.getElementById('modalTitle').textContent = 'Identical File Detected!';
+            matchTypeBadge.className = 'badge bg-danger';
+            matchTypeBadge.innerHTML = '<i class="fas fa-equals"></i> Exact Hash Match';
+            document.getElementById('matchType').textContent = 'This file is 100% identical to an existing file';
+
+            // Update detection info for exact match
+            detectionInfo.className = 'alert alert-danger mb-3';
+            detectionInfo.innerHTML = '<i class="fas fa-fingerprint"></i> <strong>Hash Verification:</strong> Exact duplicate detected (100% identical)';
+
+            // Hide similarity breakdown for exact matches
+            document.getElementById('similarityBreakdown').style.display = 'none';
+        } else {
+            // ML predicted match
+            badge.classList.add('ml-match');
+            document.getElementById('modalTitle').textContent = 'Potential Duplicate Detected!';
+            matchTypeBadge.className = 'badge bg-warning';
+            matchTypeBadge.innerHTML = '<i class="fas fa-brain"></i> ML Predicted';
+            document.getElementById('matchType').textContent = 'ML Confidence: ' + percentage + '%';
+
+            // Update detection info for ML match
+            detectionInfo.className = 'alert alert-info mb-3';
+            detectionInfo.innerHTML = '<i class="fas fa-brain"></i> <strong>ML Prediction Engine</strong> has analyzed your file';
+
+            // Show similarity breakdown
+            document.getElementById('similarityBreakdown').style.display = 'block';
+            document.getElementById('filenameSim').textContent = data.similarity.filename + '%';
+            document.getElementById('filenameBar').style.width = data.similarity.filename + '%';
+            document.getElementById('sizeSim').textContent = data.similarity.size + '%';
+            document.getElementById('sizeBar').style.width = data.similarity.size + '%';
+            document.getElementById('typeSim').textContent = data.similarity.type + '%';
+            document.getElementById('typeBar').style.width = data.similarity.type + '%';
+        }
+
+        // Update existing file details
+        document.getElementById('existingFileName').textContent = data.existing_file.name;
+        document.getElementById('existingFileSize').textContent = data.existing_file.size_mb + ' MB';
+        document.getElementById('existingFileDate').textContent = data.existing_file.upload_date;
+        document.getElementById('existingFileRefs').textContent = data.existing_file.reference_count;
+
+        modal.show();
+    }
+
+    // Modal button handlers
+    document.getElementById('skipUploadBtn').addEventListener('click', function () {
+        bootstrap.Modal.getInstance(document.getElementById('duplicateModal')).hide();
+        // Reset form
+        document.getElementById('uploadForm').reset();
+        selectedFile = null;
+    });
+
+    document.getElementById('downloadExistingBtn').addEventListener('click', function () {
+        if (duplicateData && duplicateData.existing_file) {
+            // Download the existing file
+            window.location.href = '{{ url_for("download", file_id=0) }}'.replace('0', duplicateData.existing_file.id);
+            // Keep modal open so user can still choose to store anyway
+        }
+    });
+
+    document.getElementById('storeAnywayBtn').addEventListener('click', function () {
+        bootstrap.Modal.getInstance(document.getElementById('duplicateModal')).hide();
+        document.getElementById('force_upload').value = 'true';
+        proceedWithUpload();
+    });
+
+    document.getElementById('viewExistingBtn').addEventListener('click', function () {
+        if (duplicateData && duplicateData.existing_file) {
+            window.location.href = '{{ url_for("files") }}';
+        }
+    });
+
+    function proceedWithUpload() {
         document.getElementById('uploadProgress').style.display = 'block';
         document.getElementById('uploadBtn').disabled = true;
 
-        // Simulate progress (in real app, use AJAX with progress tracking)
+        // Simulate progress
         let progress = 0;
         const interval = setInterval(function () {
             progress += 10;
@@ -75,6 +369,9 @@
                 clearInterval(interval);
             }
         }, 200);
-    });
+
+        // Submit form
+        document.getElementById('uploadForm').submit();
+    }
 </script>
 {% endblock %}

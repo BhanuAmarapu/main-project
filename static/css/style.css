@@ -11,7 +11,8 @@
 }
 
 body {
-    background-color: var(--white);
+    background-color: #e8f4f8;
+    /* Light blue-gray */
     color: var(--dark);
     font-family: 'Times New Roman', Times, serif;
     min-height: 100vh;

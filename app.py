@@ -104,47 +104,193 @@ def upload_file():
             temp_path = os.path.join(app.config['UPLOAD_TEMP'], filename)
             file.save(temp_path)
             
-            # Step 1: ML Prediction (instant analysis)
+            # STEP 0: AI CONTENT MODERATION CHECK (BEFORE ANY PROCESSING)
+            print(f"\n========== CONTENT MODERATION CHECK ==========")
+            print(f"File: {filename}")
+            
+            from content_moderator import ContentModerator
+            moderator = ContentModerator()
+            moderation_result = moderator.moderate_file(temp_path, filename)
+            
+            if not moderation_result.is_safe:
+                print(f"[MODERATION] ❌ REJECTED: {moderation_result.violation_type}")
+                print(f"[MODERATION] Details: {moderation_result.violation_details}")
+                
+                # Log the rejection in moderation_logs table
+                try:
+                    conn = get_db_connection()
+                    flagged_keywords_str = ','.join(moderation_result.flagged_keywords) if moderation_result.flagged_keywords else ''
+                    
+                    conn.execute("""
+                        INSERT INTO moderation_logs 
+                        (user_id, file_name, file_type, file_size, violation_type, 
+                         violation_details, confidence_score, flagged_keywords)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        current_user.id,
+                        filename,
+                        file.content_type or 'unknown',
+                        os.path.getsize(temp_path),
+                        moderation_result.violation_type,
+                        moderation_result.violation_details,
+                        moderation_result.confidence_score,
+                        flagged_keywords_str
+                    ))
+                    conn.commit()
+                    conn.close()
+                    print(f"[MODERATION] Logged rejection to database")
+                except Exception as e:
+                    print(f"[MODERATION] Error logging rejection: {e}")
+                
+                # Create admin alert for suspicious activity
+                try:
+                    conn = get_db_connection()
+                    alert_description = f"User attempted to upload inappropriate content: {filename}"
+                    alert_details = f"Violation: {moderation_result.violation_type}\nDetails: {moderation_result.violation_details}\nConfidence: {moderation_result.confidence_score:.2%}"
+                    
+                    conn.execute("""
+                        INSERT INTO suspicious_activities 
+                        (user_id, activity_type, severity, description, details)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        current_user.id,
+                        'INAPPROPRIATE_CONTENT',
+                        'HIGH',
+                        alert_description,
+                        alert_details
+                    ))
+                    conn.commit()
+                    conn.close()
+                    print(f"[MODERATION] Created admin alert")
+                except Exception as e:
+                    print(f"[MODERATION] Error creating alert: {e}")
+                
+                # Delete the temp file immediately
+                try:
+                    os.remove(temp_path)
+                    print(f"[MODERATION] Deleted temp file")
+                except Exception as e:
+                    print(f"[MODERATION] Error deleting temp file: {e}")
+                
+                # Return rejection message to user
+                flash("Upload rejected due to inappropriate content.", "danger")
+                return redirect(url_for('upload_page'))
+            
+            print(f"[MODERATION] ✓ Content passed moderation check")
+            
+            # Step 1: Compute file hash early for exact duplicate detection
+            from utils import get_file_hash
+            file_hash = get_file_hash(temp_path)
             file_size = os.path.getsize(temp_path)
             ext_code = get_ext_code(filename)
             
             # Open database connection for all queries
             conn = get_db_connection()
             
+            # Check for IDENTICAL files (exact hash match)
+            identical_files = conn.execute("""
+                SELECT id, file_name, file_size, file_hash, upload_timestamp, stored_path 
+                FROM files 
+                WHERE file_hash = ?
+                ORDER BY upload_timestamp DESC
+            """, (file_hash,)).fetchall()
+            
             # Get frequency
             freq = conn.execute("SELECT COUNT(*) FROM files WHERE file_name = ?", (filename,)).fetchone()[0]
             
-            # Find similar files based on metadata
+            # Find SIMILAR files based on metadata (excluding identical matches)
+            # Only show if: exact same filename OR (very close size AND same extension AND similar name pattern)
             similar_files = conn.execute("""
-                SELECT id, file_name, file_size, file_hash, upload_timestamp 
+                SELECT id, file_name, file_size, file_hash, upload_timestamp, stored_path 
                 FROM files 
-                WHERE file_name = ? OR (file_size BETWEEN ? AND ? AND file_type = ?)
+                WHERE file_hash != ? AND file_name = ?
                 ORDER BY upload_timestamp DESC
                 LIMIT 5
-            """, (filename, file_size - 1024, file_size + 1024, filename.split('.')[-1])).fetchall()
+            """, (file_hash, filename)).fetchall()
             
             # Close connection after all queries
             conn.close()
             
+            # ML Prediction
             prediction = ml_model.predict({
                 'file_size': file_size,
                 'extension_code': ext_code,
                 'frequency': freq + 1
             })
             
-            # If ML predicts duplicate, show confirmation page
-            if prediction == 1 or freq > 0:
+            # IMPORTANT: Extract content BEFORE similarity detection
+            # This allows the similarity detector to read the file content
+            file_content_text = None
+            try:
+                from content_similarity import ContentSimilarityDetector
+                detector = ContentSimilarityDetector()
+                if detector.is_text_file(filename):
+                    file_content_text = detector.read_file_content(temp_path)
+                    if file_content_text:
+                        print(f"[DEBUG] Extracted {len(file_content_text)} characters from uploaded file")
+                    else:
+                        print(f"[DEBUG] Could not extract content from {filename}")
+            except Exception as e:
+                print(f"[DEBUG] Content extraction error: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # NEW: Content-level similarity detection (80%+ match)
+            print(f"\n========== STARTING CONTENT SIMILARITY CHECK ==========")
+            print(f"File: {filename}, Hash: {file_hash[:12]}")
+            from content_similarity import detect_similar_content
+            near_duplicate_files = []
+            try:
+                near_duplicate_files = detect_similar_content(temp_path, filename, file_hash, threshold=0.60)
+                print(f"Content similarity check completed. Found {len(near_duplicate_files)} near-duplicates")
+            except Exception as e:
+                print(f"Content similarity detection error: {e}")
+                import traceback
+                traceback.print_exc()
+
+            
+            # Determine match type
+            match_type = "none"
+            if identical_files:
+                match_type = "identical"
+            elif near_duplicate_files:
+                match_type = "near_duplicate"
+            elif prediction == 1 or freq > 0 or similar_files:
+                match_type = "similar"
+            
+            # If duplicates detected (identical, near-duplicate, or similar), show confirmation page
+            if match_type != "none":
                 return render_template('upload_confirmation.html',
                                      filename=filename,
                                      temp_path=temp_path,
                                      file_size=file_size,
+                                     file_hash=file_hash,
                                      prediction=prediction,
+                                     identical_files=identical_files,
                                      similar_files=similar_files,
+                                     near_duplicate_files=near_duplicate_files,
+                                     match_type=match_type,
                                      ml_confidence="High" if prediction == 1 else "Medium")
+
 
             
             # Step 2: Deduplication (if user confirms or no duplicates predicted)
             is_duplicate, file_id = deduplicator.process_file(temp_path, filename, current_user.id)
+            
+            # Store content in uploads table for similarity detection
+            if file_content_text and file_id:
+                try:
+                    conn = get_db_connection()
+                    conn.execute("""
+                        UPDATE uploads 
+                        SET content_text = ? 
+                        WHERE file_id = ? AND user_id = ?
+                    """, (file_content_text, file_id, current_user.id))
+                    conn.commit()
+                    conn.close()
+                    print(f"[DEBUG] Stored content for file_id {file_id}")
+                except Exception as e:
+                    print(f"[DEBUG] Could not store content: {e}")
             
             # Step 3: Suspicious Activity Detection
             if Config.ENABLE_SUSPICIOUS_DETECTOR:
@@ -201,6 +347,25 @@ def confirm_upload():
     
     # Process the file
     is_duplicate, file_id = deduplicator.process_file(temp_path, filename, current_user.id)
+    
+    # Extract and store content for future similarity checks
+    try:
+        from content_similarity import ContentSimilarityDetector
+        detector = ContentSimilarityDetector()
+        if detector.is_text_file(filename):
+            file_content_text = detector.read_file_content(temp_path)
+            if file_content_text and file_id:
+                conn = get_db_connection()
+                conn.execute("""
+                    UPDATE uploads 
+                    SET content_text = ? 
+                    WHERE file_id = ? AND user_id = ?
+                """, (file_content_text, file_id, current_user.id))
+                conn.commit()
+                conn.close()
+                print(f"[DEBUG] Stored content for file_id {file_id} (confirmed upload)")
+    except Exception as e:
+        print(f"[DEBUG] Could not extract/store content: {e}")
     
     # Track suspicious activity
     if Config.ENABLE_SUSPICIOUS_DETECTOR:
@@ -260,6 +425,70 @@ def dashboard():
                            physical_size=physical_size,
                            dedup_rate=round(dedup_rate, 2),
                            audit_logs=audit_logs)
+
+@app.route('/admin/moderation')
+@login_required
+def moderation_panel():
+    """Admin panel to view content moderation logs"""
+    if current_user.role != 'admin':
+        flash('Permission denied. Admin access required.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    conn = get_db_connection()
+    
+    # Get filter parameters
+    show_reviewed = request.args.get('reviewed', 'false') == 'true'
+    
+    # Build query
+    if show_reviewed:
+        moderation_logs = conn.execute("""
+            SELECT m.*, u.username 
+            FROM moderation_logs m
+            JOIN users u ON m.user_id = u.id
+            ORDER BY m.timestamp DESC
+        """).fetchall()
+    else:
+        moderation_logs = conn.execute("""
+            SELECT m.*, u.username 
+            FROM moderation_logs m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.reviewed = 0
+            ORDER BY m.timestamp DESC
+        """).fetchall()
+    
+    # Get statistics
+    total_rejections = conn.execute("SELECT COUNT(*) FROM moderation_logs").fetchone()[0]
+    unreviewed_count = conn.execute("SELECT COUNT(*) FROM moderation_logs WHERE reviewed = 0").fetchone()[0]
+    
+    conn.close()
+    
+    return render_template('moderation.html',
+                         moderation_logs=moderation_logs,
+                         total_rejections=total_rejections,
+                         unreviewed_count=unreviewed_count,
+                         show_reviewed=show_reviewed)
+
+@app.route('/admin/moderation/<int:log_id>/review', methods=['POST'])
+@login_required
+def review_moderation(log_id):
+    """Mark a moderation log as reviewed"""
+    if current_user.role != 'admin':
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    notes = request.form.get('notes', '')
+    
+    conn = get_db_connection()
+    conn.execute("""
+        UPDATE moderation_logs 
+        SET reviewed = 1, reviewer_notes = ?
+        WHERE id = ?
+    """, (notes, log_id))
+    conn.commit()
+    conn.close()
+    
+    flash('Moderation log marked as reviewed.', 'success')
+    return redirect(url_for('moderation_panel'))
 
 @app.route('/audit/<int:file_id>')
 @login_required

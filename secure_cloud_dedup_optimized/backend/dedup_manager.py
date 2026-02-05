@@ -7,6 +7,7 @@ from .models import db, File, Upload, PerformanceMetric
 from .encryption import get_file_hash
 from .config import Config
 import json
+from difflib import SequenceMatcher
 
 
 class DeduplicationManager:
@@ -267,3 +268,186 @@ class DeduplicationManager:
         except Exception as e:
             print(f"ML prediction error: {e}")
             return 0.5
+    
+    def calculate_filename_similarity(self, name1, name2):
+        """
+        Calculate filename similarity using Levenshtein distance
+        
+        Args:
+            name1: First filename
+            name2: Second filename
+        
+        Returns:
+            Similarity score (0.0 to 1.0)
+        """
+        # Normalize filenames (lowercase, remove extensions for comparison)
+        base1 = os.path.splitext(name1.lower())[0]
+        base2 = os.path.splitext(name2.lower())[0]
+        
+        return SequenceMatcher(None, base1, base2).ratio()
+    
+    def calculate_size_similarity(self, size1, size2):
+        """
+        Calculate file size similarity
+        
+        Args:
+            size1: First file size in bytes
+            size2: Second file size in bytes
+        
+        Returns:
+            Similarity score (0.0 to 1.0)
+        """
+        if size1 == 0 and size2 == 0:
+            return 1.0
+        
+        max_size = max(size1, size2)
+        min_size = min(size1, size2)
+        
+        if max_size == 0:
+            return 0.0
+        
+        # Calculate percentage difference
+        return min_size / max_size
+    
+    def calculate_similarity(self, file_name, file_size, file_type, existing_file):
+        """
+        Calculate overall similarity between uploaded file and existing file
+        
+        Args:
+            file_name: Uploaded filename
+            file_size: Uploaded file size
+            file_type: Uploaded file type
+            existing_file: Existing File object from database
+        
+        Returns:
+            dict with similarity score and breakdown
+        """
+        # Calculate individual similarities
+        filename_sim = self.calculate_filename_similarity(file_name, existing_file.file_name)
+        size_sim = self.calculate_size_similarity(file_size, existing_file.file_size)
+        type_match = 1.0 if file_type.lower() == existing_file.file_type.lower() else 0.0
+        
+        # Weighted average (filename: 40%, size: 30%, type: 20%, ML: 10%)
+        # For now, ML prediction is set to 0.5 (neutral) if not available
+        ml_score = 0.5
+        if self.ml_model:
+            try:
+                features = self.extract_file_features(file_name, file_size, file_type)
+                ml_score = self.predict_duplicate_ml(features)
+            except:
+                pass
+        
+        overall_similarity = (
+            filename_sim * 0.4 +
+            size_sim * 0.3 +
+            type_match * 0.2 +
+            ml_score * 0.1
+        )
+        
+        return {
+            'overall': round(overall_similarity * 100, 2),
+            'filename': round(filename_sim * 100, 2),
+            'size': round(size_sim * 100, 2),
+            'type': round(type_match * 100, 2),
+            'ml_prediction': round(ml_score * 100, 2)
+        }
+    
+    def extract_file_features(self, file_name, file_size, file_type):
+        """
+        Extract features for ML model prediction
+        
+        Args:
+            file_name: Filename
+            file_size: File size in bytes
+            file_type: File type/extension
+        
+        Returns:
+            Feature vector for ML model
+        """
+        # Simple feature extraction (can be enhanced)
+        features = [
+            len(file_name),  # Filename length
+            file_size,  # File size
+            len(file_type),  # Extension length
+            file_name.count('_'),  # Underscore count
+            file_name.count('-'),  # Dash count
+        ]
+        return features
+    
+    def get_similar_files(self, file_name, file_size, file_type, file_hash, threshold=70.0):
+        """
+        Find similar files based on metadata and hash
+        
+        Args:
+            file_name: Uploaded filename
+            file_size: Uploaded file size
+            file_type: Uploaded file type
+            file_hash: File hash
+            threshold: Minimum similarity percentage to return (default 70%)
+        
+        Returns:
+            list of dicts with similar files and their similarity scores
+        """
+        similar_files = []
+        
+        # First check for exact hash match
+        exact_match = File.query.filter_by(file_hash=file_hash).first()
+        if exact_match:
+            return [{
+                'file': exact_match,
+                'similarity': {
+                    'overall': 100.0,
+                    'filename': 100.0,
+                    'size': 100.0,
+                    'type': 100.0,
+                    'ml_prediction': 100.0
+                },
+                'match_type': 'exact_hash'
+            }]
+        
+        # Check for metadata-based similarity
+        # Get files of the same type first for efficiency
+        candidate_files = File.query.filter_by(file_type=file_type).all()
+        
+        for existing_file in candidate_files:
+            similarity = self.calculate_similarity(file_name, file_size, file_type, existing_file)
+            
+            if similarity['overall'] >= threshold:
+                similar_files.append({
+                    'file': existing_file,
+                    'similarity': similarity,
+                    'match_type': 'ml_predicted'
+                })
+        
+        # Sort by similarity (highest first)
+        similar_files.sort(key=lambda x: x['similarity']['overall'], reverse=True)
+        
+        # Return top 5 most similar files
+        return similar_files[:5]
+    
+    def check_duplicate_with_details(self, file_hash, file_name, file_size, file_type):
+        """
+        Enhanced duplicate check that returns detailed information
+        
+        Args:
+            file_hash: SHA-256 hash of file
+            file_name: Original filename
+            file_size: File size in bytes
+            file_type: File type/extension
+        
+        Returns:
+            dict with duplicate status and similar files
+        """
+        similar_files = self.get_similar_files(file_name, file_size, file_type, file_hash)
+        
+        if not similar_files:
+            return {
+                'is_duplicate': False,
+                'similar_files': []
+            }
+        
+        # If we have similar files, return them
+        return {
+            'is_duplicate': True,
+            'similar_files': similar_files
+        }

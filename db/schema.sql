@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS uploads (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
     file_id INTEGER,
+    content_text TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (file_id) REFERENCES files (id)
@@ -62,3 +63,23 @@ CREATE TABLE IF NOT EXISTS user_activity_stats (
     window_start DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE IF NOT EXISTS moderation_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_size INTEGER,
+    violation_type TEXT NOT NULL,
+    violation_details TEXT,
+    confidence_score REAL,
+    flagged_keywords TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed INTEGER DEFAULT 0,
+    reviewer_notes TEXT,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_moderation_user ON moderation_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_timestamp ON moderation_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_moderation_reviewed ON moderation_logs(reviewed);
