@@ -28,6 +28,26 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-database"></i> Storage Location</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="storage_location" id="storage_s3"
+                                value="s3" checked>
+                            <label class="form-check-label" for="storage_s3">
+                                <i class="fab fa-aws"></i> AWS S3 (Cloud Storage)
+                                <small class="text-muted d-block">Recommended for scalability and backup</small>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="storage_location" id="storage_local"
+                                value="local">
+                            <label class="form-check-label" for="storage_local">
+                                <i class="fas fa-hdd"></i> Local Disk
+                                <small class="text-muted d-block">Faster access, uses local storage</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
                         <div class="progress" style="display: none;" id="uploadProgress">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                                 style="width: 0%"></div>

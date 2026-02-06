@@ -43,6 +43,10 @@ class Config:
     AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
     S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', '')
     
+    # S3 Direct Upload Configuration (from config.yaml)
+    DIRECT_S3_UPLOAD = True  # Upload directly to S3 without local storage
+    SKIP_LOCAL_STORAGE = True  # Don't save files locally when S3 is enabled
+    
     # Encryption Configuration
     AES_KEY = os.getenv('AES_KEY', 'Sixteen byte key').encode()
     ENCRYPTION_SALT = b'salt_secure_dedup_2024'

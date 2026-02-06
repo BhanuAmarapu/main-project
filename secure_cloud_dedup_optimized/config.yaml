@@ -50,6 +50,8 @@ upload:
 
 # Cloud Storage Settings
 cloud:
+  direct_upload: true  # Upload directly to S3 without local storage
+  skip_local_storage: true  # Don't save files locally when S3 is enabled
   simulate_latency: true
   simulate_bandwidth: true
   base_latency_ms: 50

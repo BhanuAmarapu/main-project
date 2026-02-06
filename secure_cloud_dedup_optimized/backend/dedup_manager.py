@@ -52,7 +52,7 @@ class DeduplicationManager:
         
         return False, None
     
-    def process_file(self, temp_path, file_name, user_id, use_optimized=False):
+    def process_file(self, temp_path, file_name, user_id, use_optimized=False, prefer_s3=True):
         """
         Process uploaded file with deduplication
         
@@ -61,6 +61,7 @@ class DeduplicationManager:
             file_name: Original filename
             user_id: User ID
             use_optimized: Use optimized encryption
+            prefer_s3: User preference for S3 storage (True) or local storage (False)
         
         Returns:
             dict with processing results
@@ -123,6 +124,7 @@ class DeduplicationManager:
             # New unique file - encrypt and store
             from .encryption import encrypt_file
             from .optimized_encryption import OptimizedEncryption
+            import io
             
             # Generate stored filename
             file_extension = os.path.splitext(file_name)[1]
@@ -130,32 +132,97 @@ class DeduplicationManager:
             stored_file_name = f"{file_hash}_{base_name}{file_extension}"
             stored_path = os.path.join(Config.UPLOAD_DIR, stored_file_name)
             
-            # Encrypt file
-            encryption_start = time.time()
-            if use_optimized:
-                encryptor = OptimizedEncryption()
-                enc_stats = encryptor.encrypt_file(temp_path, stored_path)
-                encryption_method = 'optimized_convergent'
-            else:
-                encrypt_file(temp_path, stored_path)
-                enc_stats = {'time_seconds': time.time() - encryption_start}
-                encryption_method = 'convergent'
-            
             # Handle S3 upload if enabled
             cloud_path = None
             is_in_cloud = False
             
-            if Config.USE_S3:
-                from .cloud_utils import upload_to_s3
-                s3_object_name = stored_file_name
+            # Encrypt file
+            encryption_start = time.time()
+            
+            if Config.USE_S3 and Config.DIRECT_S3_UPLOAD and prefer_s3:
+                # Direct S3 upload - encrypt to memory and upload without local storage
+                from .cloud_utils import upload_fileobj_to_s3
                 
-                if upload_to_s3(stored_path, s3_object_name):
+                # Encrypt to a temporary in-memory buffer
+                encrypted_buffer = io.BytesIO()
+                
+                if use_optimized:
+                    encryptor = OptimizedEncryption()
+                    # Read file content
+                    with open(temp_path, 'rb') as f:
+                        file_content = f.read()
+                    # Encrypt to buffer
+                    encrypted_data = encryptor.encrypt_data(file_content)
+                    encrypted_buffer.write(encrypted_data)
+                    encryption_method = 'optimized_convergent'
+                    enc_stats = {'time_seconds': time.time() - encryption_start}
+                else:
+                    # Use standard encryption to buffer
+                    with open(temp_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+                    from cryptography.hazmat.backends import default_backend
+                    import hashlib
+                    
+                    # Derive key from file hash (convergent encryption)
+                    key = hashlib.sha256(file_hash.encode()).digest()
+                    iv = os.urandom(16)
+                    
+                    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+                    encryptor = cipher.encryptor()
+                    
+                    # Pad data
+                    from cryptography.hazmat.primitives import padding
+                    padder = padding.PKCS7(128).padder()
+                    padded_data = padder.update(file_content) + padder.finalize()
+                    
+                    # Encrypt
+                    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+                    
+                    # Write IV + encrypted data to buffer
+                    encrypted_buffer.write(iv)
+                    encrypted_buffer.write(encrypted_data)
+                    encryption_method = 'convergent'
+                    enc_stats = {'time_seconds': time.time() - encryption_start}
+                
+                # Upload encrypted buffer directly to S3
+                s3_object_name = stored_file_name
+                encrypted_buffer.seek(0)
+                
+                if upload_fileobj_to_s3(encrypted_buffer, s3_object_name):
                     cloud_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_object_name}"
                     is_in_cloud = True
+                    print(f"✓ File uploaded directly to S3: {s3_object_name}")
+                else:
+                    # Fallback to local storage if S3 upload fails
+                    print(f"⚠ S3 upload failed, falling back to local storage")
+                    encrypted_buffer.seek(0)
+                    with open(stored_path, 'wb') as f:
+                        f.write(encrypted_buffer.read())
+                
+                encrypted_buffer.close()
+                
+            else:
+                # Local storage or S3 disabled - encrypt to local file
+                if use_optimized:
+                    encryptor = OptimizedEncryption()
+                    enc_stats = encryptor.encrypt_file(temp_path, stored_path)
+                    encryption_method = 'optimized_convergent'
+                else:
+                    encrypt_file(temp_path, stored_path)
+                    enc_stats = {'time_seconds': time.time() - encryption_start}
+                    encryption_method = 'convergent'
+                
+                # Upload to S3 if enabled and user prefers S3 (but keep local copy)
+                if Config.USE_S3 and prefer_s3 and not Config.SKIP_LOCAL_STORAGE:
+                    from .cloud_utils import upload_to_s3
+                    s3_object_name = stored_file_name
                     
-                    # Remove local copy if in cloud
-                    if os.path.exists(stored_path):
-                        os.remove(stored_path)
+                    if upload_to_s3(stored_path, s3_object_name):
+                        cloud_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_object_name}"
+                        is_in_cloud = True
+                        print(f"✓ File uploaded to S3 (local copy retained): {s3_object_name}")
             
             # Create file record
             new_file = File(

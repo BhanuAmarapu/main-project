@@ -195,12 +195,22 @@ def upload():
             # Check if this is a forced upload (user clicked "Store Anyway")
             force_upload = request.form.get('force_upload', 'false') == 'true'
             
+            # Get storage location preference
+            storage_location = request.form.get('storage_location', 's3')  # Default to S3
+            prefer_s3 = (storage_location == 's3')
+            
             # If not forced, the duplicate check happens on client-side
             # This route only processes actual uploads
             
             # Process file with deduplication
             use_optimized = request.form.get('use_optimized', 'false') == 'true'
-            result = dedup_manager.process_file(temp_path, filename, current_user.id, use_optimized=use_optimized)
+            result = dedup_manager.process_file(
+                temp_path, 
+                filename, 
+                current_user.id, 
+                use_optimized=use_optimized,
+                prefer_s3=prefer_s3
+            )
             
             if result['success']:
                 # Grant ownership
@@ -212,7 +222,8 @@ def upload():
                     else:
                         flash(f'Duplicate file detected! Space saved: {result["space_saved"] / 1024:.2f} KB', 'info')
                 else:
-                    flash(f'File uploaded successfully! Processing time: {result["processing_time"]:.2f}s', 'success')
+                    storage_msg = "in AWS S3" if result.get('stored_in_cloud') else "locally"
+                    flash(f'File uploaded successfully {storage_msg}! Processing time: {result["processing_time"]:.2f}s', 'success')
                 
                 # Save Bloom filter state
                 bloom_filter.save_to_db()

@@ -69,6 +69,44 @@ class OptimizedEncryption:
         
         return sha256_hash.hexdigest()
     
+    def encrypt_data(self, data):
+        """
+        Encrypt data in memory (for direct S3 upload)
+        
+        Args:
+            data: Bytes to encrypt
+        
+        Returns:
+            Encrypted bytes
+        """
+        # Get data hash for convergent encryption
+        data_hash = hashlib.sha256(data).hexdigest()
+        key = self._derive_key(data_hash.encode())
+        
+        # Split data into chunks
+        chunks = []
+        for i in range(0, len(data), self.chunk_size):
+            chunks.append(data[i:i + self.chunk_size])
+        
+        # Encrypt chunks in parallel
+        encrypted_chunks = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.workers) as executor:
+            futures = [executor.submit(self._encrypt_chunk, chunk, key) for chunk in chunks]
+            for future in concurrent.futures.as_completed(futures):
+                encrypted_chunks.append(future.result())
+        
+        # Build encrypted data with format: [chunk_count][chunk1_size][chunk1_data]...
+        import io
+        output = io.BytesIO()
+        output.write(len(encrypted_chunks).to_bytes(4, byteorder='big'))
+        
+        for enc_chunk in encrypted_chunks:
+            chunk_size = len(enc_chunk)
+            output.write(chunk_size.to_bytes(4, byteorder='big'))
+            output.write(enc_chunk)
+        
+        return output.getvalue()
+    
     def encrypt_file(self, input_path, output_path, progress_callback=None):
         """
         Encrypt file with parallel chunk processing

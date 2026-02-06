@@ -59,6 +59,35 @@ def upload_to_s3(file_path, object_name):
         return False
 
 
+def upload_fileobj_to_s3(file_obj, object_name):
+    """
+    Upload a file object directly to S3 bucket without saving to disk
+    
+    Args:
+        file_obj: File-like object (e.g., BytesIO or file stream)
+        object_name: S3 object name
+    
+    Returns:
+        bool: True if successful
+    """
+    s3 = get_s3_client()
+    if not s3:
+        return False
+    
+    try:
+        # Ensure file pointer is at the beginning
+        file_obj.seek(0)
+        s3.upload_fileobj(file_obj, Config.S3_BUCKET_NAME, object_name)
+        return True
+    except Exception as e:
+        from botocore.exceptions import NoCredentialsError
+        if isinstance(e, NoCredentialsError):
+            print("AWS credentials not found.")
+        else:
+            print(f"S3 Upload Error (fileobj): {e}")
+        return False
+
+
 def download_from_s3(object_name, local_path):
     """
     Download a file from S3 bucket
