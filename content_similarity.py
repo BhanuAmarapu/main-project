@@ -4,12 +4,20 @@ Detects near-duplicate files based on content similarity (90%+ match)
 even when files have different names or sizes.
 """
 import os
-import sqlite3
+import pymysql
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 from config import Config
+
+try:
+    from PIL import Image
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("WARNING: PIL or pytesseract not installed. Image OCR will be disabled.")
 
 
 class ContentSimilarityDetector:
@@ -23,12 +31,13 @@ class ContentSimilarityDetector:
             similarity_threshold: Minimum similarity score (0-1) to consider files similar
         """
         self.similarity_threshold = similarity_threshold
-        self.db_path = Config.DATABASE
+        pass
         
         # Text file extensions to process
         self.text_extensions = {
             'txt', 'md', 'py', 'js', 'java', 'cpp', 'c', 'h', 
-            'html', 'css', 'json', 'xml', 'csv', 'log', 'sql', 'pdf'
+            'html', 'css', 'json', 'xml', 'csv', 'log', 'sql', 'pdf',
+            'png', 'jpg', 'jpeg'
         }
     
     def is_text_file(self, filename):
@@ -76,8 +85,20 @@ class ContentSimilarityDetector:
         Returns:
             File content as string, or None if error
         """
+        lower_path = file_path.lower()
+        
+        # Check if it's an image file
+        if OCR_AVAILABLE and lower_path.endswith(('.png', '.jpg', '.jpeg')):
+            try:
+                img = Image.open(file_path)
+                text = pytesseract.image_to_string(img)
+                return text if text.strip() else None
+            except Exception as e:
+                print(f"[DEBUG] Error extracting text from image {file_path}: {e}")
+                return None
+                
         # Check if it's a PDF file
-        if file_path.lower().endswith('.pdf'):
+        if lower_path.endswith('.pdf'):
             return self.extract_text_from_pdf(file_path)
         
         # For text files, read normally
@@ -161,8 +182,8 @@ class ContentSimilarityDetector:
         print(f"[DEBUG] Successfully read {len(new_content)} characters from uploaded file")
         
         # Get all existing files from database with their content
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        from mysql_wrapper import get_mysql_connection
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         
         # Get all files except exact duplicates, with their stored content

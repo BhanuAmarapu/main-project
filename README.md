@@ -25,7 +25,8 @@ CloudDedup Pro is a high-performance, secure cloud storage system that combines 
 -   **Machine Learning**: Scikit-Learn (Decision Tree, TF-IDF Vectorizer)
 -   **Encryption**: AES-256 (Cryptography lib)
 -   **Cloud**: AWS S3 (Boto3)
--   **Database**: SQLite
+-   **Database**: MySQL
+-   **Containerization**: Docker & Docker Compose
 -   **PDF Processing**: PyPDF2
 -   **Frontend**: Bootstrap 5 + Bootstrap Icons
 
@@ -35,57 +36,64 @@ CloudDedup Pro is a high-performance, secure cloud storage system that combines 
 -   AWS Account (for S3 storage)
 -   Windows/Linux/MacOS
 
-## ⚙️ Installation & Setup
+## 🐳 Docker Deployment (Recommended)
 
-1.  **Clone the Repository**:
+Run the entire system (including MySQL) on any device with one command:
+
+1. **Install Docker and Docker Desktop** (if on Windows/Mac).
+2. **Launch the system**:
+   ```bash
+   docker-compose up --build
+   ```
+3. **Access the app**: `http://localhost:5000`
+
+The system will automatically:
+- Start a MySQL 8.0 container.
+- Build the Python application image.
+- Initialize the database schema and default admin user.
+- Train the ML model if not present.
+
+---
+
+## ⚙️ Manual Installation & Setup (VS Code)
+
+1. **Install Prerequisites**:
+    - Install [Python 3.11+](https://www.python.org/downloads/)
+    - Install [Visual Studio Code](https://code.visualstudio.com/)
+    - Install [MySQL Server](https://dev.mysql.com/downloads/installer/)
+
+2. **Clone and Open in VS Code**:
     ```bash
+    git clone <repository_url>
     cd "Hybrid ML-CNS Dedupliation System"
+    code .
     ```
 
-2.  **Install Dependencies**:
+3. **Set Up Virtual Environment and Install Dependencies** (In VS Code Terminal):
     ```bash
+    python -m venv venv
+    .\venv\Scripts\activate   # For Windows
+    # source venv/bin/activate # For macOS/Linux
     pip install -r requirements.txt
     ```
 
-3.  **Run Setup Script** (Recommended):
+4. **Initialize MySQL Database**:
+    - Ensure your MySQL server is running.
+    - Create a database named `cloud_dedup`: `CREATE DATABASE cloud_dedup;`
+    - Update `config.py` with your MySQL User and Password if different from default (`root` / `Bhanu@2004`).
+    - Run the initializer:
+      ```bash
+      python init_db.py
+      ```
+
+5. **Run the Application**:
     ```bash
-    python scripts/setup.py
+    python run.py
     ```
-    This will create directories, initialize the database, and create a default admin user.
-
-    **OR** manually initialize the database:
-    ```bash
-    python init_db.py
-    ```
-
-## ☁️ Configuring AWS S3
-
-To use real cloud storage, update `config.py` or `.env`:
-
-1.  Set `USE_S3 = True`.
-2.  Provide your AWS credentials:
-    ```python
-    AWS_ACCESS_KEY = 'YOUR_ACCESS_KEY'
-    AWS_SECRET_KEY = 'YOUR_SECRET_KEY'
-    S3_BUCKET_NAME = 'YOUR_BUCKET_NAME'
-    AWS_REGION = 'YOUR_REGION'
-    ```
-
-## 🏃 Running the Application
-
-Start the Flask development server:
-```bash
-python run.py
-```
-
-**OR** run directly:
-```bash
-python app.py
-```
 
 Access the application at: `http://127.0.0.1:5000`
 
-**Default Login**: 
+**Default Admin Credentials**: 
 - Username: `admin`
 - Password: `admin123`
 
@@ -99,7 +107,10 @@ Access the application at: `http://127.0.0.1:5000`
 -   `auditing.py`: Integrity verification module.
 -   `utils.py`: Helper functions for S3, hashing, and logs.
 -   `templates/`: UI components and pages.
--   `db/`: SQLite database and schema.
+-   `mysql_wrapper.py`: MySQL compatibility wrapper for SQLite-like database interaction.
+-   `db/schema.sql`: MySQL database schema definition.
+-   `Dockerfile`: Application container configuration.
+-   `docker-compose.yml`: System orchestration (App + MySQL).
 
 ## 🔍 Duplicate Detection Feature
 

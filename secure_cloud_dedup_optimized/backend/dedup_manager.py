@@ -8,6 +8,15 @@ from .encryption import get_file_hash
 from .config import Config
 import json
 from difflib import SequenceMatcher
+import traceback
+
+try:
+    from PIL import Image
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("WARNING: PIL or pytesseract not installed. Image OCR will be disabled.")
 
 
 class DeduplicationManager:
@@ -224,6 +233,15 @@ class DeduplicationManager:
                         is_in_cloud = True
                         print(f"✓ File uploaded to S3 (local copy retained): {s3_object_name}")
             
+            # Extract text if it's an image
+            extracted_text = None
+            if OCR_AVAILABLE and file_type.lower() in ['png', 'jpg', 'jpeg']:
+                try:
+                    img = Image.open(temp_path)
+                    extracted_text = pytesseract.image_to_string(img)
+                except Exception as e:
+                    print(f"OCR Error for {file_name}: {e}")
+                    
             # Create file record
             new_file = File(
                 file_name=file_name,
@@ -236,7 +254,8 @@ class DeduplicationManager:
                 reference_count=1,
                 is_deduplicated=False,
                 is_in_cloud=is_in_cloud,
-                cloud_path=cloud_path
+                cloud_path=cloud_path,
+                extracted_text=extracted_text
             )
             
             db.session.add(new_file)
@@ -441,7 +460,7 @@ class DeduplicationManager:
         ]
         return features
     
-    def get_similar_files(self, file_name, file_size, file_type, file_hash, threshold=70.0):
+    def get_similar_files(self, file_name, file_size, file_type, file_hash, threshold=70.0, extracted_text=None):
         """
         Find similar files based on metadata and hash
         
@@ -451,6 +470,7 @@ class DeduplicationManager:
             file_type: Uploaded file type
             file_hash: File hash
             threshold: Minimum similarity percentage to return (default 70%)
+            extracted_text: Extracted OCR text (if any)
         
         Returns:
             list of dicts with similar files and their similarity scores
@@ -467,7 +487,8 @@ class DeduplicationManager:
                     'filename': 100.0,
                     'size': 100.0,
                     'type': 100.0,
-                    'ml_prediction': 100.0
+                    'ml_prediction': 100.0,
+                    'ocr_similarity': 100.0 if file_type.lower() in ['png', 'jpg', 'jpeg'] else None
                 },
                 'match_type': 'exact_hash'
             }]
@@ -477,7 +498,7 @@ class DeduplicationManager:
         candidate_files = File.query.filter_by(file_type=file_type).all()
         
         for existing_file in candidate_files:
-            similarity = self.calculate_similarity(file_name, file_size, file_type, existing_file)
+            similarity = self.calculate_similarity(file_name, file_size, file_type, existing_file, extracted_text)
             
             if similarity['overall'] >= threshold:
                 similar_files.append({
@@ -492,7 +513,7 @@ class DeduplicationManager:
         # Return top 5 most similar files
         return similar_files[:5]
     
-    def check_duplicate_with_details(self, file_hash, file_name, file_size, file_type):
+    def check_duplicate_with_details(self, file_hash, file_name, file_size, file_type, extracted_text=None):
         """
         Enhanced duplicate check that returns detailed information
         
@@ -501,11 +522,12 @@ class DeduplicationManager:
             file_name: Original filename
             file_size: File size in bytes
             file_type: File type/extension
+            extracted_text: Extracted OCR text (if any)
         
         Returns:
             dict with duplicate status and similar files
         """
-        similar_files = self.get_similar_files(file_name, file_size, file_type, file_hash)
+        similar_files = self.get_similar_files(file_name, file_size, file_type, file_hash, extracted_text=extracted_text)
         
         if not similar_files:
             return {

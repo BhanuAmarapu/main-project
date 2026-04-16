@@ -59,6 +59,9 @@ class File(db.Model):
     is_in_cloud = db.Column(db.Boolean, default=False)
     cloud_path = db.Column(db.String(500))
     
+    # OCR Data
+    extracted_text = db.Column(db.Text)
+    
     # Relationships
     uploads = db.relationship('Upload', backref='file', lazy='dynamic')
     blocks = db.relationship('Block', backref='file', lazy='dynamic')

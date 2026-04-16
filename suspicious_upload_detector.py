@@ -6,7 +6,7 @@ Monitors user upload behavior and detects anomalies such as:
 - Repeated Proof of Ownership (PoW) failures
 """
 
-import sqlite3
+import pymysql
 from datetime import datetime, timedelta
 from config import Config
 from utils import log_action
@@ -27,12 +27,12 @@ class SuspiciousUploadDetector:
     ACTIVITY_POW_FAILURE = "POW_FAILURE"
     
     def __init__(self):
-        self.db_path = Config.DATABASE
+        pass
         
     def get_db_connection(self):
         """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        from mysql_wrapper import get_mysql_connection
+        conn = get_mysql_connection()
         return conn
     
     def track_upload(self, user_id):

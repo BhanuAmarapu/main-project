@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 import os
-import sqlite3
+import pymysql
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from config import Config
@@ -40,9 +40,8 @@ def load_user(user_id):
     return None
 
 def get_db_connection():
-    conn = sqlite3.connect(Config.DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    from mysql_wrapper import get_mysql_connection
+    return get_mysql_connection()
 
 @app.route('/')
 def index():
@@ -75,7 +74,7 @@ def register():
             conn.commit()
             flash('Registration successful. Please login.')
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+        except pymysql.err.IntegrityError:
             flash('Username already exists')
         conn.close()
     return render_template('register.html')
@@ -706,20 +705,17 @@ if __name__ == '__main__':
         # Check if database exists and has tables
         db_needs_init = False
         
-        if not os.path.exists(Config.DATABASE):
-            print("  Database not found, creating...")
-            db_needs_init = True
-        else:
-            # Check if tables exist
-            try:
-                conn = get_db_connection()
-                cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-                if cursor.fetchone() is None:
-                    print("  Database tables missing, initializing...")
-                    db_needs_init = True
-                conn.close()
-            except Exception:
+        # Check if tables exist
+        try:
+            from mysql_wrapper import get_mysql_connection
+            conn = get_mysql_connection()
+            cursor = conn.execute("SHOW TABLES LIKE 'users'")
+            if cursor.fetchone() is None:
+                print("  Database tables missing, initializing...")
                 db_needs_init = True
+            conn.close()
+        except Exception:
+            db_needs_init = True
         
         # Initialize database if needed
         if db_needs_init:

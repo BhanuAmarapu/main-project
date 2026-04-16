@@ -1,23 +1,32 @@
-import sqlite3
+"""
+Reset password for an existing user (MySQL version)
+"""
+from mysql_wrapper import get_mysql_connection
 import os
-
-DB_PATH = os.path.join('db', 'cloud.db')
+import sys
 
 def reset_password():
     """Reset password for an existing user"""
     print("=" * 60)
-    print("Password Reset Tool")
+    print("MySQL Password Reset Tool")
     print("=" * 60)
     
     # Connect to database
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    try:
+        conn = get_mysql_connection()
+    except Exception as e:
+        print(f"\n[ERROR] Could not connect to database: {e}")
+        return
     
     # Show existing users
     print("\nExisting users:")
-    users = conn.execute("SELECT id, username, role FROM users").fetchall()
-    for user in users:
-        print(f"  [{user['id']}] {user['username']} ({user['role']})")
+    try:
+        cursor = conn.execute("SELECT id, username, role FROM users")
+        users = cursor.fetchall()
+        for user in users:
+            print(f"  [{user['id']}] {user['username']} ({user['role']})")
+    except Exception as e:
+        print(f"  (Error fetching users: {e})")
     
     print("\n" + "=" * 60)
     
@@ -46,7 +55,7 @@ def reset_password():
     conn.close()
     
     print("\n" + "=" * 60)
-    print(f"[SUCCESS] Password updated successfully!")
+    print(f"[SUCCESS] Password updated successfully in MySQL!")
     print(f"   Username: {username}")
     print(f"   New Password: {new_password}")
     print("=" * 60)

@@ -68,9 +68,9 @@ def decrypt_file(file_path, output_path, key=None):
 
 def log_action(action, details):
     """Append log entry to logs directory."""
-    import sqlite3
+    from mysql_wrapper import get_mysql_connection
     from datetime import datetime
-    conn = sqlite3.connect(Config.DATABASE)
+    conn = get_mysql_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO logs (action, details) VALUES (?, ?)", (action, details))
     conn.commit()

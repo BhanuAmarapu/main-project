@@ -1,16 +1,17 @@
 import os
-import sqlite3
+import pymysql
 import hashlib
 from config import Config
 from utils import log_action, get_file_hash
 
 class Auditor:
     def __init__(self):
-        self.db_path = Config.DATABASE
+        pass
 
     def audit_file(self, file_id):
         """Perform integrity audit on a file."""
-        conn = sqlite3.connect(self.db_path)
+        from mysql_wrapper import get_mysql_connection
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT file_name, file_hash, stored_path FROM files WHERE id = ?", (file_id,))
         file_data = cursor.fetchone()
@@ -77,7 +78,8 @@ class Auditor:
         return sha256.hexdigest()
 
     def get_audit_logs(self):
-        conn = sqlite3.connect(self.db_path)
+        from mysql_wrapper import get_mysql_connection
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM audits ORDER BY timestamp DESC")
         logs = cursor.fetchall()

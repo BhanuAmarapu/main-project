@@ -19,8 +19,11 @@ class Config:
     
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     
-    # Database
-    DATABASE = os.path.join(BASE_DIR, os.getenv('DATABASE_PATH', 'db/cloud.db'))
+    # Database - MySQL
+    MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
+    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'Bhanu@2004')
+    MYSQL_DB = os.getenv('MYSQL_DB', 'cloud_dedup')
     
     # Upload folders
     UPLOAD_TEMP = os.path.join(BASE_DIR, 'uploads', 'temp_files')
@@ -37,9 +40,9 @@ class Config:
     LOGS_DIR = os.path.join(BASE_DIR, 'logs')
     
     # Cloud Storage (AWS S3)
-    USE_S3 = os.getenv('USE_S3', 'False').lower() == 'true'  # Changed default to False for security
-    AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY', '')  # No default credentials
-    AWS_SECRET_KEY = os.getenv('AWS_SECRET_KEY', '')  # No default credentials
+    USE_S3 = os.getenv('USE_S3', 'True').lower() == 'true'
+    AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY', '')
+    AWS_SECRET_KEY = os.getenv('AWS_SECRET_KEY', '')
     AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
     S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', '')
     

@@ -18,8 +18,13 @@ class Config:
     
     # Database Configuration
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    DATABASE_PATH = os.path.join(BASE_DIR, 'database', 'database.db')
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATABASE_PATH}'
+    
+    MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
+    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'Bhanu@2004')
+    MYSQL_DB = os.getenv('MYSQL_DB', 'cloud_dedup')
+    
+    SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Storage Directories
@@ -37,7 +42,7 @@ class Config:
     REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
     
     # AWS S3 Configuration
-    USE_S3 = os.getenv('USE_S3', 'False').lower() == 'true'
+    USE_S3 = True
     AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY', '')
     AWS_SECRET_KEY = os.getenv('AWS_SECRET_KEY', '')
     AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')

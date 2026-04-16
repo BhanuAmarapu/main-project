@@ -10,3 +10,5 @@ flask-login
 python-dotenv
 gunicorn
 PyPDF2
+
+pymysql

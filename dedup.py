@@ -1,11 +1,11 @@
 import os
-import sqlite3
+import pymysql
 from config import Config
 from utils import get_file_hash, encrypt_file, log_action, upload_to_s3
 
 class Deduplicator:
     def __init__(self):
-        self.db_path = Config.DATABASE
+        pass
         self.stored_dir = Config.UPLOAD_STORED
 
     def process_file(self, temp_path, file_name, user_id):
@@ -18,7 +18,8 @@ class Deduplicator:
         file_type = file_name.split('.')[-1] if '.' in file_name else 'unknown'
 
         # Check for deduplication
-        conn = sqlite3.connect(self.db_path)
+        from mysql_wrapper import get_mysql_connection
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, stored_path FROM files WHERE file_hash = ?", (file_hash,))
         existing_file = cursor.fetchone()
@@ -56,21 +57,20 @@ class Deduplicator:
             # Encrypt and move to stored_files (local temp before S3)
             encrypt_file(temp_path, stored_path)
             
-            # S3 Integration
-            final_path = stored_path
-            if Config.USE_S3:
-                s3_object_name = stored_file_name
-                if upload_to_s3(stored_path, s3_object_name):
-                    log_action("Cloud Sync", f"File {file_name} synced to S3 bucket.")
-                    final_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_object_name}"
-                else:
-                    log_action("Cloud Error", f"Failed to sync {file_name} to S3. Keeping local as backup.")
-                
-                # Direct S3 requirement: Always remove local encrypted copy if S3 upload was attempted
-                # even if it failed, we don't want permanent local storage if the user asked for "Direct S3"
-                # However, for safety, we only remove if it's already in S3 or if we want to honor "Direct S3" strictly.
+            # S3 Integration (Direct S3 Only)
+            s3_object_name = stored_file_name
+            if upload_to_s3(stored_path, s3_object_name):
+                log_action("Cloud Sync", f"File {file_name} synced to S3 bucket.")
+                final_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_object_name}"
+            else:
+                log_action("Cloud Error", f"Failed to sync {file_name} to S3.")
                 if os.path.exists(stored_path):
-                    os.remove(stored_path) 
+                    os.remove(stored_path)
+                raise Exception("Upload failed: Could not connect to S3.")
+            
+            # Remove local encrypted copy
+            if os.path.exists(stored_path):
+                os.remove(stored_path) 
             
             # Update database
             cursor.execute("""
