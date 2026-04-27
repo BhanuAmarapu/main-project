@@ -42,11 +42,19 @@ CloudDedup Pro is a high-performance, secure cloud storage system that combines 
 Run the entire system (including MySQL) on any device with one command:
 
 1. **Install Docker and Docker Desktop** (if on Windows/Mac).
-2. **Launch the system**:
+2. **Configure Environment Variables**:
+   Create a `.env` file in the root directory with your credentials:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key
+   AWS_ACCESS_KEY=your_aws_access_key
+   AWS_SECRET_KEY=your_aws_secret_key
+   S3_BUCKET_NAME=your_s3_bucket
+   ```
+3. **Launch the system**:
    ```bash
    docker-compose up --build
    ```
-3. **Access the app**: `http://localhost:5000`
+4. **Access the app**: `http://localhost:5000`
 
 The system will automatically:
 - Start a MySQL 8.0 container.
@@ -221,21 +229,22 @@ Training Data → TF-IDF Vectorization → Cosine Similarity → Rejection Decis
 
 **Image Files** (Multimodal Analysis):
 - `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.webp`
-- Analyzes image content using **GPT-4 Vision** to extract text and describe visual layout, applying semantic matching for advanced deduplication.
+- Analyzes image content using **GPT-4 Vision** for strict safety moderation and **DINOv2** for deep semantic image matching and deduplication.
 
 ### What Happens on Rejection
 
-1. 🚫 **Upload Rejected**: User sees "Upload rejected due to inappropriate content"
-2. 📝 **Logged**: Rejection saved to `moderation_logs` table with details
-3. 🚨 **Admin Alert**: Automatic alert created in `suspicious_activities` table
-4. 🗑️ **File Deleted**: Temp file immediately removed from server
-5. 📊 **Trackable**: Admins can review all rejections at `/admin/moderation`
+1. 🚫 **Upload Rejected**: User sees "Your upload has been rejected due to violation of content policies."
+2. 📝 **Logged**: Rejection securely saved to `moderation_logs` table with details and User Identity (Name and Email).
+3. 🚨 **Admin Alert**: Automatic alert created in `suspicious_activities` table with the user's details.
+4. 🗑️ **File Deleted**: Temp file immediately removed from server (no prohibited content is ever stored).
+5. 📊 **Trackable**: Admins can review all rejections at `/admin/moderation`.
 
 ### Admin Moderation Panel
 
 Admins can access `/admin/moderation` to:
 - View all rejected uploads
-- See user details, violation type, and flagged keywords
+- Securely track User Identity (Username and Email) linked to policy violations
+- See specific violation types and flagged keywords
 - Filter by reviewed/unreviewed status
 - Add reviewer notes
 - Track moderation statistics

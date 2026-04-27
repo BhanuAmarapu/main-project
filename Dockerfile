@@ -26,6 +26,8 @@ EXPOSE 5000
 # Set environment variables
 ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
+ENV HF_HOME=/app/ml_data/hf_cache
+ENV TRANSFORMERS_CACHE=/app/ml_data/hf_cache
 
 # Command to run the application
 # We use run.py as it handles initializations

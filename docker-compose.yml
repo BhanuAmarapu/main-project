@@ -27,8 +27,8 @@ services:
       - USE_S3=True # Set to True if S3 credentials are provided below
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_KEY=${AWS_SECRET_KEY}
-      - AWS_REGION=us-east-1
-      - S3_BUCKET_NAME=hybridclouddeduplication
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       - db
