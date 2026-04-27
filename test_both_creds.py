@@ -1,20 +1,15 @@
 import boto3
 from botocore.exceptions import ClientError
 
+import os
+
 credentials = [
     {
-        "name": "Set 1 (deduplication-main)",
-        "key": "***REMOVED***",
-        "secret": "***REMOVED***",
-        "region": "us-east-1",
-        "bucket": "deduplication-main"
-    },
-    {
-        "name": "Set 2 (bhanumainproject01)",
-        "key": "***REMOVED***",
-        "secret": "***REMOVED***",
-        "region": "us-east-1",
-        "bucket": "bhanumainproject01"
+        "name": "S3 Bucket 1",
+        "key": os.getenv("AWS_ACCESS_KEY"),
+        "secret": os.getenv("AWS_SECRET_KEY"),
+        "region": os.getenv("AWS_REGION", "us-east-1"),
+        "bucket": os.getenv("S3_BUCKET_NAME", "default-bucket-name")
     }
 ]
 
