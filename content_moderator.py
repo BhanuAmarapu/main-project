@@ -14,9 +14,22 @@ import re
 from dataclasses import dataclass
 from typing import Tuple, List, Optional
 from datetime import datetime
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, util
+import torch
 import numpy as np
+
+
+class SBERTModel:
+    """Singleton for SBERT model to avoid reloading"""
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            print("[MODERATION] Loading SBERT model (all-MiniLM-L6-v2)...")
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            cls._instance = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+        return cls._instance
 
 
 @dataclass
@@ -35,21 +48,28 @@ class ModerationResult:
 
 class ContentModerator:
     """
-    Intelligent content moderation service using TF-IDF
+    Intelligent content moderation service using Sentence-BERT
     
-    Analyzes text content using TF-IDF similarity against known bad content patterns.
+    Analyzes text content using SBERT similarity against known bad content patterns.
     """
     
-    def __init__(self, strict_mode=False, threshold=0.35):
+    _embeddings_initialized = False
+    _explicit_embeddings = None
+    _profanity_embeddings = None
+    _violence_embeddings = None
+    _noise_embeddings = None
+
+    def __init__(self, strict_mode=False, threshold=0.60):
         """
-        Initialize content moderator with TF-IDF
+        Initialize content moderator with SBERT
         
         Args:
             strict_mode: If True, uses stricter filtering rules
-            threshold: TF-IDF similarity threshold (0.35 = 35% similarity to bad content)
+            threshold: SBERT similarity threshold (0.60 = 60% semantic similarity)
         """
         self.strict_mode = strict_mode
         self.threshold = threshold
+        self.model = SBERTModel.get_instance()
         
         # Training data: Examples of bad content for each category
         self.explicit_examples = [
@@ -75,20 +95,32 @@ class ContentModerator:
             "gore blood violent death murder",
             "hate crime racist violence abuse"
         ]
+
+        self.noise_examples = [
+            "random garbage irrelevant technical noise",
+            "non-relevant node test data unrelated",
+            "asdfghjkl qwerty uiop meaningless text",
+            "unrelated technical noise testing string",
+            "garbage data nothing to do with application"
+        ]
         
-        # Initialize TF-IDF vectorizers for each category
-        self.explicit_vectorizer = TfidfVectorizer()
-        self.profanity_vectorizer = TfidfVectorizer()
-        self.violence_vectorizer = TfidfVectorizer()
+        # Pre-encode examples into embeddings ONLY ONCE
+        if not ContentModerator._embeddings_initialized:
+            print("[MODERATION] Pre-encoding reference examples...")
+            ContentModerator._explicit_embeddings = self.model.encode(self.explicit_examples, convert_to_tensor=True)
+            ContentModerator._profanity_embeddings = self.model.encode(self.profanity_examples, convert_to_tensor=True)
+            ContentModerator._violence_embeddings = self.model.encode(self.violence_examples, convert_to_tensor=True)
+            ContentModerator._noise_embeddings = self.model.encode(self.noise_examples, convert_to_tensor=True)
+            ContentModerator._embeddings_initialized = True
+            
+        self.explicit_embeddings = ContentModerator._explicit_embeddings
+        self.profanity_embeddings = ContentModerator._profanity_embeddings
+        self.violence_embeddings = ContentModerator._violence_embeddings
+        self.noise_embeddings = ContentModerator._noise_embeddings
         
-        # Fit vectorizers with training data
-        self.explicit_vectors = self.explicit_vectorizer.fit_transform(self.explicit_examples)
-        self.profanity_vectors = self.profanity_vectorizer.fit_transform(self.profanity_examples)
-        self.violence_vectors = self.violence_vectorizer.fit_transform(self.violence_examples)
-        
-    def analyze_text_with_tfidf(self, text: str) -> Tuple[str, float, List[str]]:
+    def analyze_text_with_sbert(self, text: str) -> Tuple[str, float, List[str]]:
         """
-        Analyze text using TF-IDF similarity against bad content patterns
+        Analyze text using SBERT similarity against bad content patterns
         
         Args:
             text: Text content to analyze
@@ -96,30 +128,34 @@ class ContentModerator:
         Returns:
             Tuple of (violation_type, confidence_score, flagged_keywords)
         """
+        if not text.strip():
+            return None, 0.0, []
+            
         text_lower = text.lower()
         
-        # Calculate similarity scores for each category
         try:
-            # Explicit content check
-            text_vector_explicit = self.explicit_vectorizer.transform([text_lower])
-            explicit_similarities = cosine_similarity(text_vector_explicit, self.explicit_vectors)
-            max_explicit_score = np.max(explicit_similarities)
+            # Encode target text
+            text_embedding = self.model.encode(text_lower, convert_to_tensor=True)
             
-            # Profanity check
-            text_vector_profanity = self.profanity_vectorizer.transform([text_lower])
-            profanity_similarities = cosine_similarity(text_vector_profanity, self.profanity_vectors)
-            max_profanity_score = np.max(profanity_similarities)
+            # Calculate similarity scores for each category
+            explicit_sims = util.cos_sim(text_embedding, self.explicit_embeddings)
+            max_explicit_score = float(torch.max(explicit_sims).item())
             
-            # Violence check
-            text_vector_violence = self.violence_vectorizer.transform([text_lower])
-            violence_similarities = cosine_similarity(text_vector_violence, self.violence_vectors)
-            max_violence_score = np.max(violence_similarities)
+            profanity_sims = util.cos_sim(text_embedding, self.profanity_embeddings)
+            max_profanity_score = float(torch.max(profanity_sims).item())
+            
+            violence_sims = util.cos_sim(text_embedding, self.violence_embeddings)
+            max_violence_score = float(torch.max(violence_sims).item())
+            
+            noise_sims = util.cos_sim(text_embedding, self.noise_embeddings)
+            max_noise_score = float(torch.max(noise_sims).item())
             
             # Determine which category has highest score
             scores = {
                 'EXPLICIT': max_explicit_score,
                 'PROFANITY': max_profanity_score,
-                'VIOLENCE': max_violence_score
+                'VIOLENCE': max_violence_score,
+                'IRRELEVANT_NOISE': max_noise_score
             }
             
             violation_type = max(scores, key=scores.get)
@@ -133,6 +169,8 @@ class ContentModerator:
                 keywords = {'fuck', 'shit', 'damn', 'bitch', 'ass', 'bastard', 'hell', 'piss', 'cock', 'dick', 'pussy'}
             elif violation_type == 'VIOLENCE':
                 keywords = {'kill', 'murder', 'rape', 'torture', 'abuse', 'violence', 'weapon', 'gun', 'bomb', 'hate'}
+            elif violation_type == 'IRRELEVANT_NOISE':
+                keywords = {'random', 'garbage', 'irrelevant', 'noise', 'meaningless', 'unrelated', 'test'}
             
             for keyword in keywords:
                 if keyword in text_lower:
@@ -141,7 +179,7 @@ class ContentModerator:
             return violation_type, confidence, flagged_keywords
             
         except Exception as e:
-            print(f"[MODERATION] TF-IDF analysis error: {e}")
+            print(f"[MODERATION] SBERT analysis error: {e}")
             return None, 0.0, []
     
     def moderate_text(self, file_path: str) -> ModerationResult:
@@ -162,12 +200,12 @@ class ContentModerator:
             if not content.strip():
                 return ModerationResult(is_safe=True, confidence_score=1.0)
             
-            # Analyze with TF-IDF
-            violation_type, confidence, flagged_keywords = self.analyze_text_with_tfidf(content)
+            # Analyze with SBERT
+            violation_type, confidence, flagged_keywords = self.analyze_text_with_sbert(content)
             
             # Check if confidence exceeds threshold
             if confidence >= self.threshold:
-                violation_details = f"TF-IDF analysis detected {violation_type.lower()} content (similarity: {confidence:.1%})"
+                violation_details = f"SBERT analysis detected {violation_type.lower()} content (similarity: {confidence:.1%})"
                 if flagged_keywords:
                     violation_details += f". Found keywords: {', '.join(flagged_keywords[:5])}"
                 
@@ -191,7 +229,7 @@ class ContentModerator:
     
     def moderate_image(self, file_path: str) -> ModerationResult:
         """
-        Moderate image content (filename-based checking)
+        Moderate image content using GPT-4 Vision (Multimodal Analysis)
         
         Args:
             file_path: Path to image file
@@ -200,42 +238,110 @@ class ContentModerator:
             ModerationResult with safety status
         """
         try:
-            # Get filename for keyword checking
+            # First perform filename keyword check as a quick filter
             filename = os.path.basename(file_path).lower()
-            
-            # Check filename for suspicious keywords
             suspicious_image_keywords = {
                 'gun', 'weapon', 'nude', 'naked', 'porn', 'xxx', 'sex',
                 'explicit', 'nsfw', 'violence', 'blood', 'gore', 'kill',
                 'murder', 'rape', 'abuse', 'hate', 'racist', 'terrorist'
             }
             
-            flagged_keywords = []
-            for keyword in suspicious_image_keywords:
-                if keyword in filename:
-                    flagged_keywords.append(keyword)
-            
+            flagged_keywords = [k for k in suspicious_image_keywords if k in filename]
             if flagged_keywords:
                 return ModerationResult(
                     is_safe=False,
                     violation_type='EXPLICIT' if any(k in ['nude', 'naked', 'porn', 'xxx', 'sex', 'nsfw'] for k in flagged_keywords) else 'VIOLENCE',
                     violation_details=f"Suspicious filename detected: {', '.join(flagged_keywords)}",
-                    confidence_score=0.7,
+                    confidence_score=0.9,
                     flagged_keywords=flagged_keywords
                 )
+
+            # Deep analysis using GPT-4 Vision if API key is present
+            from config import Config
+            if not getattr(Config, 'OPENAI_API_KEY', None):
+                print("[WARNING] OPENAI_API_KEY is not set. Using basic filename moderation only.")
+                return ModerationResult(is_safe=True, confidence_score=0.5)
+
+            import base64
+            from openai import OpenAI
+            client = OpenAI(api_key=Config.OPENAI_API_KEY)
+
+            with open(file_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             
-            # If no suspicious keywords in filename, allow
-            return ModerationResult(
-                is_safe=True,
-                violation_details="Filename check passed",
-                confidence_score=0.5
+            mime_type = "image/jpeg"
+            if filename.endswith('.png'): mime_type = "image/png"
+            elif filename.endswith('.webp'): mime_type = "image/webp"
+            elif filename.endswith('.gif'): mime_type = "image/gif"
+
+            print(f"[MODERATION] Analyzing image {filename} with GPT-4 Vision...")
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a strict safety and quality content moderator. Analyze this image and classify it strictly into one of three categories: 'Safe', 'Sensitive', or 'Restricted'. \n\nRestricted: Weapons (guns, knives, explosives), violence, gore, explicit NSFW, illegal acts, OR non-relevant/noisy data, node/unrelated technical noise, or random meaningless data. \nSensitive: Edge-case content that is slightly unsafe.\nSafe: Benign, meaningful, regular content.\n\nAlso provide a confidence score (0.0 to 1.0). If Restricted/Sensitive confidence > 0.60, it will be rejected.\n\nOutput format EXACTLY like this: '[Classification]: [Confidence Score] - [Brief reason]'. Example: 'Restricted: 0.95 - Image contains a firearm.'"
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Classify this image."},
+                            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}
+                        ]
+                    }
+                ],
+                max_tokens=100
             )
+
+            result_text = response.choices[0].message.content.strip()
+            print(f"[MODERATION] GPT-4 Vision result for {filename}: {result_text}")
+
+            try:
+                # Parse format: "Restricted: 0.95 - Reason"
+                parts = result_text.split(":")
+                classification = parts[0].strip()
+                score_and_reason = parts[1].strip().split("-", 1)
+                confidence = float(score_and_reason[0].strip())
+                reason = score_and_reason[1].strip() if len(score_and_reason) > 1 else result_text
+            except Exception as e:
+                classification = "Safe" if "Safe" in result_text else "Restricted"
+                confidence = 0.9
+                reason = result_text
+
+            if classification == "Safe" or (classification != "Safe" and confidence <= 0.60):
+                return ModerationResult(is_safe=True, confidence_score=1.0)
             
+            # If Restricted or Sensitive, we reject
+            violation_type = "RESTRICTED"
+            if "Sensitive" in classification:
+                violation_type = "SENSITIVE"
+            elif "violence" in reason.lower() or "weapon" in reason.lower() or "gun" in reason.lower():
+                violation_type = "VIOLENCE"
+            elif "explicit" in reason.lower() or "nsfw" in reason.lower():
+                violation_type = "EXPLICIT"
+            elif "nois" in reason.lower() or "irrelevant" in reason.lower() or "random" in reason.lower():
+                violation_type = "IRRELEVANT_NOISE"
+
+            return ModerationResult(
+                is_safe=False,
+                violation_type=violation_type,
+                violation_details=f"GPT-4 Vision detected unsafe/irrelevant content: {reason}",
+                confidence_score=confidence
+            )
+
         except Exception as e:
-            print(f"[MODERATION] Error checking image: {e}")
+            print(f"[MODERATION] Error checking image with GPT-4 Vision: {e}")
+            # If using strict guardrails, we fail closed on API errors (including invalid API key)
+            if self.strict_mode or Config.OPENAI_API_KEY == 'your_openai_api_key_here' or not Config.OPENAI_API_KEY:
+                return ModerationResult(
+                    is_safe=False,
+                    violation_type="API_ERROR",
+                    violation_details=f"Moderation failed (API Error/Missing Key). Strict mode rejects unverified content. Error: {str(e)}",
+                    confidence_score=1.0
+                )
             return ModerationResult(
                 is_safe=True,
-                violation_details=f"Error during moderation: {str(e)}"
+                violation_details=f"Error during image moderation: {str(e)}"
             )
     
     def moderate_video(self, file_path: str) -> ModerationResult:
@@ -249,13 +355,46 @@ class ContentModerator:
             ModerationResult with safety status
         """
         try:
-            # Placeholder for video moderation
-            return ModerationResult(
-                is_safe=True,
-                violation_details="Video moderation not yet implemented",
-                confidence_score=0.5
-            )
+            import cv2
+            import tempfile
+            import os
+
+            cap = cv2.VideoCapture(file_path)
+            if not cap.isOpened():
+                return ModerationResult(is_safe=True, violation_details="Could not open video file")
+
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if frame_count <= 0:
+                cap.release()
+                return ModerationResult(is_safe=True)
+
+            # Analyze middle frame as a representative sample
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
+            ret, frame = cap.read()
+            cap.release()
+
+            if not ret or frame is None:
+                return ModerationResult(is_safe=True)
+
+            # Save frame to temp file
+            fd, temp_img_path = tempfile.mkstemp(suffix=".jpg")
+            os.close(fd)
+            cv2.imwrite(temp_img_path, frame)
+
+            # Moderate the extracted frame
+            result = self.moderate_image(temp_img_path)
             
+            # Clean up
+            try:
+                os.remove(temp_img_path)
+            except:
+                pass
+                
+            return result
+            
+        except ImportError:
+            print("[MODERATION] OpenCV not installed, skipping video moderation")
+            return ModerationResult(is_safe=True, violation_details="OpenCV not installed")
         except Exception as e:
             print(f"[MODERATION] Error checking video: {e}")
             return ModerationResult(is_safe=True)

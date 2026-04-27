@@ -9,6 +9,8 @@ from dedup import Deduplicator
 from auditing import Auditor
 from utils import log_action
 from suspicious_upload_detector import SuspiciousUploadDetector
+from content_moderator import ContentModerator
+from content_similarity import ContentSimilarityDetector, detect_similar_content
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,6 +21,12 @@ ml_model = MLModel()
 deduplicator = Deduplicator()
 auditor = Auditor()
 suspicious_detector = SuspiciousUploadDetector()
+
+# Pre-warm SBERT models and load caches on server start
+print("[INIT] Pre-warming ML models and caches...")
+moderator = ContentModerator()
+similarity_detector = ContentSimilarityDetector()
+print("[INIT] Pre-warming complete!")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -66,11 +74,12 @@ def login():
 def register():
     if request.method == 'POST':
         username = request.form['username']
+        email = request.form.get('email', 'no_email@example.com')
         password = request.form['password']
         role = request.form.get('role', 'user')
         conn = get_db_connection()
         try:
-            conn.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (username, password, role))
+            conn.execute("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)", (username, email, password, role))
             conn.commit()
             flash('Registration successful. Please login.')
             return redirect(url_for('login'))
@@ -107,12 +116,10 @@ def upload_file():
             print(f"\n========== CONTENT MODERATION CHECK ==========")
             print(f"File: {filename}")
             
-            from content_moderator import ContentModerator
-            moderator = ContentModerator()
             moderation_result = moderator.moderate_file(temp_path, filename)
             
             if not moderation_result.is_safe:
-                print(f"[MODERATION] ❌ REJECTED: {moderation_result.violation_type}")
+                print(f"[MODERATION] [X] REJECTED: {moderation_result.violation_type}")
                 print(f"[MODERATION] Details: {moderation_result.violation_details}")
                 
                 # Log the rejection in moderation_logs table
@@ -154,7 +161,7 @@ def upload_file():
                     """, (
                         current_user.id,
                         'INAPPROPRIATE_CONTENT',
-                        'HIGH',
+                        'CRITICAL',
                         alert_description,
                         alert_details
                     ))
@@ -172,10 +179,10 @@ def upload_file():
                     print(f"[MODERATION] Error deleting temp file: {e}")
                 
                 # Return rejection message to user
-                flash("Upload rejected due to inappropriate content.", "danger")
-                return redirect(url_for('upload_page'))
+                flash("Your upload has been rejected due to violation of content policies.", "danger")
+                return redirect(url_for('upload_file'))
             
-            print(f"[MODERATION] ✓ Content passed moderation check")
+            print(f"[MODERATION] [OK] Content passed moderation check")
             
             # Step 1: Compute file hash early for exact duplicate detection
             from utils import get_file_hash
@@ -221,10 +228,8 @@ def upload_file():
             # This allows the similarity detector to read the file content
             file_content_text = None
             try:
-                from content_similarity import ContentSimilarityDetector
-                detector = ContentSimilarityDetector()
-                if detector.is_text_file(filename):
-                    file_content_text = detector.read_file_content(temp_path)
+                if similarity_detector.is_text_file(filename):
+                    file_content_text = similarity_detector.read_file_content(temp_path)
                     if file_content_text:
                         print(f"[DEBUG] Extracted {len(file_content_text)} characters from uploaded file")
                     else:
@@ -237,10 +242,9 @@ def upload_file():
             # NEW: Content-level similarity detection (80%+ match)
             print(f"\n========== STARTING CONTENT SIMILARITY CHECK ==========")
             print(f"File: {filename}, Hash: {file_hash[:12]}")
-            from content_similarity import detect_similar_content
             near_duplicate_files = []
             try:
-                near_duplicate_files = detect_similar_content(temp_path, filename, file_hash, threshold=0.60)
+                near_duplicate_files = similarity_detector.find_similar_files(temp_path, filename, file_hash)
                 print(f"Content similarity check completed. Found {len(near_duplicate_files)} near-duplicates")
             except Exception as e:
                 print(f"Content similarity detection error: {e}")
@@ -290,6 +294,13 @@ def upload_file():
                     print(f"[DEBUG] Stored content for file_id {file_id}")
                 except Exception as e:
                     print(f"[DEBUG] Could not store content: {e}")
+                    
+            if file_id and similarity_detector.is_image_file(filename):
+                try:
+                    similarity_detector.add_dino_cache(file_id, temp_path)
+                    print(f"[DEBUG] Cached DINOv2 embedding for file_id {file_id}")
+                except Exception as e:
+                    print(f"[DEBUG] Error caching DINOv2: {e}")
             
             # Step 3: Suspicious Activity Detection
             if Config.ENABLE_SUSPICIOUS_DETECTOR:
@@ -349,10 +360,8 @@ def confirm_upload():
     
     # Extract and store content for future similarity checks
     try:
-        from content_similarity import ContentSimilarityDetector
-        detector = ContentSimilarityDetector()
-        if detector.is_text_file(filename):
-            file_content_text = detector.read_file_content(temp_path)
+        if similarity_detector.is_text_file(filename):
+            file_content_text = similarity_detector.read_file_content(temp_path)
             if file_content_text and file_id:
                 conn = get_db_connection()
                 conn.execute("""
@@ -365,6 +374,13 @@ def confirm_upload():
                 print(f"[DEBUG] Stored content for file_id {file_id} (confirmed upload)")
     except Exception as e:
         print(f"[DEBUG] Could not extract/store content: {e}")
+        
+    if file_id and similarity_detector.is_image_file(filename):
+        try:
+            similarity_detector.add_dino_cache(file_id, temp_path)
+            print(f"[DEBUG] Cached DINOv2 embedding for file_id {file_id} after confirmation")
+        except Exception as e:
+            print(f"[DEBUG] Error caching DINOv2: {e}")
     
     # Track suspicious activity
     if Config.ENABLE_SUSPICIOUS_DETECTOR:
@@ -441,14 +457,14 @@ def moderation_panel():
     # Build query
     if show_reviewed:
         moderation_logs = conn.execute("""
-            SELECT m.*, u.username 
+            SELECT m.*, u.username, u.email 
             FROM moderation_logs m
             JOIN users u ON m.user_id = u.id
             ORDER BY m.timestamp DESC
         """).fetchall()
     else:
         moderation_logs = conn.execute("""
-            SELECT m.*, u.username 
+            SELECT m.*, u.username, u.email 
             FROM moderation_logs m
             JOIN users u ON m.user_id = u.id
             WHERE m.reviewed = 0
@@ -690,14 +706,14 @@ if __name__ == '__main__':
     # Check if model exists, only train if needed
     print("\n[1/3] Checking ML Model...")
     if os.path.exists(Config.ML_MODEL_PATH):
-        print("✓ ML Model found, skipping training")
+        print("[OK] ML Model found, skipping training")
     else:
         print("  Training new ML Model...")
         try:
             ml_model.train(Config.ML_DATASET)
-            print("✓ ML Model trained successfully")
+            print("[OK] ML Model trained successfully")
         except Exception as e:
-            print(f"✗ ML Model training failed: {e}")
+            print(f"[X] ML Model training failed: {e}")
             print("  Continuing without ML predictions...")
     
     print("\n[2/3] Initializing database...")
@@ -721,16 +737,16 @@ if __name__ == '__main__':
         if db_needs_init:
             from init_db import init_db
             init_db()
-            print("✓ Database initialized successfully")
+            print("[OK] Database initialized successfully")
         else:
-            print("✓ Database connection successful")
+            print("[OK] Database connection successful")
     except Exception as e:
-        print(f"✗ Database error: {e}")
+        print(f"[X] Database error: {e}")
         print("  Please run: python init_db.py")
     
     print("\n[3/3] Starting Flask server...")
     print("=" * 60)
-    print("🚀 Server starting on http://127.0.0.1:5000")
+    print("[START] Server starting on http://127.0.0.1:5000")
     print("   Press CTRL+C to stop the server")
     print("=" * 60)
     
@@ -738,10 +754,10 @@ if __name__ == '__main__':
         app.run(host='127.0.0.1', port=5000, debug=True, use_reloader=False)
     except OSError as e:
         if "address already in use" in str(e).lower():
-            print("\n❌ ERROR: Port 5000 is already in use!")
+            print("\n[X] ERROR: Port 5000 is already in use!")
             print("   Please stop other Python processes and try again.")
             print("   Run: Stop-Process -Name python -Force")
         else:
-            print(f"\n❌ ERROR: {e}")
+            print(f"\n[X] ERROR: {e}")
     except KeyboardInterrupt:
-        print("\n\n👋 Server stopped by user")
+        print("\n\n[BYE] Server stopped by user")

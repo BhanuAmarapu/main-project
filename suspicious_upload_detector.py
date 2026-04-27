@@ -176,7 +176,7 @@ class SuspiciousUploadDetector:
         cursor = conn.cursor()
         
         query = """
-            SELECT sa.*, u.username 
+            SELECT sa.*, u.username, u.email 
             FROM suspicious_activities sa
             JOIN users u ON sa.user_id = u.id
         """

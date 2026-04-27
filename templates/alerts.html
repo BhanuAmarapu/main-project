@@ -257,10 +257,16 @@
                             {% endif %}
                         </div>
                         <h6 class="mb-1">
-                            <i class="bi bi-person-fill"></i> User: <strong>{{ alert.username }}</strong>
+                            <i class="bi bi-person-fill"></i> User: <strong>{{ alert.username }}</strong> 
+                            {% if alert.email %}
+                            <span class="text-muted ms-2" style="font-size: 0.9em;"><i class="bi bi-envelope"></i> {{ alert.email }}</span>
+                            {% endif %}
                         </h6>
-                        <p class="mb-1">{{ alert.description }}</p>
-                        <small class="text-muted">
+                        <div class="alert-description mt-2 p-2" style="background-color: rgba(255,255,255,0.7); border-radius: 5px; border-left: 3px solid #667eea;">
+                            <p class="mb-0 fw-bold"><i class="bi bi-file-earmark-text"></i> Alert Details:</p>
+                            <p class="mb-1">{{ alert.description }}</p>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
                             <i class="bi bi-clock"></i> {{ alert.timestamp }}
                         </small>
                         {% if alert.details %}

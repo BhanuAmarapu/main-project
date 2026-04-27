@@ -39,6 +39,9 @@ class Config:
     # Audit Logs
     LOGS_DIR = os.path.join(BASE_DIR, 'logs')
     
+    # OpenAI API Key for GPT-4 Vision
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+    
     # Cloud Storage (AWS S3)
     USE_S3 = os.getenv('USE_S3', 'True').lower() == 'true'
     AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY', '')

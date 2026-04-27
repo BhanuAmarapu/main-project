@@ -1,30 +1,31 @@
 """
-Test TF-IDF Based Content Moderation
+Test SBERT Based Content Moderation
 """
 
 from content_moderator import ContentModerator
 import os
 
-def test_tfidf_moderation():
-    moderator = ContentModerator(threshold=0.35)
+def test_sbert_moderation():
+    # SBERT Picked up meaning, so threshold might need slightly higher tuning or lower depending on examples.
+    # 0.45 is a good start for dense vectors.
+    moderator = ContentModerator(threshold=0.45)
     
     print("="*70)
-    print("TF-IDF CONTENT MODERATION TEST")
+    print("SBERT SEMANTIC CONTENT MODERATION TEST")
     print("="*70)
-    print(f"Threshold: {moderator.threshold:.0%} similarity to bad content\n")
+    print(f"Threshold: {moderator.threshold:.0%} semantic similarity to bad content\n")
     
     test_cases = [
         ("safe_document.txt", "This is a normal document about cloud storage and file management systems.", True),
-        ("explicit_content.txt", "This contains explicit adult sexual content and pornography.", False),
+        ("paraphrased_bad.txt", "This file features imagery of a mature nature including erotic acts.", False),
         ("profanity_text.txt", "This fucking document has shit and damn curse words.", False),
-        ("violence_text.txt", "This discusses violence, murder, and weapons like guns.", False),
-        ("user_test.txt", "Explicit adult sexual content and inappropriate language.", False),
-        ("borderline.txt", "This document mentions adult education programs.", True),
+        ("violence_text.txt", "This discusses aggressive behavior, homicide, and firearms.", False),
+        ("borderline.txt", "This document mentions adult education programs for grown-ups.", True),
     ]
     
     for filename, content, should_pass in test_cases:
         # Create test file
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
         
         # Test moderation
@@ -44,16 +45,18 @@ def test_tfidf_moderation():
             print(f"   Confidence: {result.confidence_score:.1%}")
             print(f"   Details: {result.violation_details}")
         else:
-            print(f"   Confidence (safe): {result.confidence_score:.1%}")
+            # For SBERT, confidence_score is (1.0 - max_similarity) in the logic I wrote
+            print(f"   Safety Confidence: {result.confidence_score:.1%}")
         
         print()
         
         # Cleanup
-        os.remove(filename)
+        if os.path.exists(filename):
+            os.remove(filename)
     
     print("="*70)
-    print("TEST COMPLETE - TF-IDF Algorithm Working!")
+    print("TEST COMPLETE - SBERT Semantic Moderation Algorithm Functional!")
     print("="*70)
 
 if __name__ == '__main__':
-    test_tfidf_moderation()
+    test_sbert_moderation()

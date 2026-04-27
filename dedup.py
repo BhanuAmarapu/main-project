@@ -57,26 +57,11 @@ class Deduplicator:
             # Encrypt and move to stored_files (local temp before S3)
             encrypt_file(temp_path, stored_path)
             
-            # S3 Integration (Direct S3 Only)
-            s3_object_name = stored_file_name
-            if upload_to_s3(stored_path, s3_object_name):
-                log_action("Cloud Sync", f"File {file_name} synced to S3 bucket.")
-                final_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_object_name}"
-            else:
-                log_action("Cloud Error", f"Failed to sync {file_name} to S3.")
-                if os.path.exists(stored_path):
-                    os.remove(stored_path)
-                raise Exception("Upload failed: Could not connect to S3.")
-            
-            # Remove local encrypted copy
-            if os.path.exists(stored_path):
-                os.remove(stored_path) 
-            
-            # Update database
+            # First insert into database with local path
             cursor.execute("""
                 INSERT INTO files (file_name, file_hash, file_size, file_type, stored_path)
                 VALUES (?, ?, ?, ?, ?)
-            """, (file_name, file_hash, file_size, file_type, final_path))
+            """, (file_name, file_hash, file_size, file_type, stored_path))
             
             file_id = cursor.lastrowid
             
@@ -84,6 +69,34 @@ class Deduplicator:
             
             conn.commit()
             conn.close()
+            
+            # Cloud Sync (Hybrid Approach) - ASYNCHRONOUS
+            if Config.USE_S3:
+                import threading
+                def background_s3_upload(local_path, s3_obj_name, f_id, f_name):
+                    try:
+                        if upload_to_s3(local_path, s3_obj_name):
+                            log_action("Cloud Sync", f"File {f_name} synced to S3 bucket.")
+                            s3_path = f"s3://{Config.S3_BUCKET_NAME}/{s3_obj_name}"
+                            
+                            # Update DB
+                            from mysql_wrapper import get_mysql_connection
+                            bg_conn = get_mysql_connection()
+                            bg_conn.execute("UPDATE files SET stored_path = ? WHERE id = ?", (s3_path, f_id))
+                            bg_conn.commit()
+                            bg_conn.close()
+                            
+                            # Remove local file to save space
+                            if os.path.exists(local_path):
+                                os.remove(local_path)
+                        else:
+                            log_action("Cloud Warning", f"S3 sync failed for {f_name}, using local storage.")
+                    except Exception as e:
+                        log_action("Cloud Error", f"S3 Error: {str(e)}")
+                
+                threading.Thread(target=background_s3_upload, args=(stored_path, stored_file_name, file_id, file_name)).start()
+            else:
+                log_action("Local Storage", f"S3 disabled, storing {file_name} locally.")
             
             log_action("Upload", f"New file stored: {file_name} (ID: {file_id})")
             return False, file_id

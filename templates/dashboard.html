@@ -331,7 +331,7 @@
                                 </div>
                                 <div class="ms-2">
                                     <div class="small fw-bold">{{ log.file_name }}</div>
-                                    <small class="text-muted">{{ log.timestamp.split(' ')[1] }}</small>
+                                    <small class="text-muted">{{ (log.timestamp|string).split(' ')[1] }}</small>
                                 </div>
                             </div>
                             <p class="mb-0 small text-muted lh-sm">{{ log.message }}</p>

@@ -22,7 +22,8 @@ CloudDedup Pro is a high-performance, secure cloud storage system that combines 
 ## 🛠️ Technology Stack
 
 -   **Backend**: Python Flask
--   **Machine Learning**: Scikit-Learn (Decision Tree, TF-IDF Vectorizer)
+-   **Machine Learning**: Scikit-Learn (Decision Tree, TF-IDF Vectorizer), Sentence-BERT
+-   **Image Analysis**: OpenAI GPT-4 Vision (Multimodal Analysis)
 -   **Encryption**: AES-256 (Cryptography lib)
 -   **Cloud**: AWS S3 (Boto3)
 -   **Database**: MySQL
@@ -81,6 +82,7 @@ The system will automatically:
     - Ensure your MySQL server is running.
     - Create a database named `cloud_dedup`: `CREATE DATABASE cloud_dedup;`
     - Update `config.py` with your MySQL User and Password if different from default (`root` / `Bhanu@2004`).
+    - Create a `.env` file in the root directory and add your `OPENAI_API_KEY=your_api_key` for image analysis features.
     - Run the initializer:
       ```bash
       python init_db.py
@@ -145,6 +147,7 @@ When you upload a file, the system performs intelligent duplicate detection:
 - **Algorithm**: Computes cosine similarity between document vectors
 - **Supported Files**: 
   - Text files: `.txt`, `.md`, `.py`, `.js`, `.java`, `.cpp`, `.c`, `.h`, `.html`, `.css`, `.json`, `.xml`, `.csv`, `.log`, `.sql`
+  - Image files: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` (Uses GPT-4 Vision to extract text and visual context)
   - PDF files: Extracts text using PyPDF2
 - **Visual**: Yellow alert with "Near-Duplicate Files Found" and similarity percentage
 - **Display**: Table showing similar files with exact similarity scores (e.g., "85.3% Similar")
@@ -216,9 +219,9 @@ Training Data → TF-IDF Vectorization → Cosine Similarity → Rejection Decis
 - `.py`, `.js`, `.java`, `.cpp`, `.c`, `.h`, `.html`, `.css`, `.sql`
 - `.pdf` (text extraction via PyPDF2)
 
-**Image Files** (Filename Analysis):
+**Image Files** (Multimodal Analysis):
 - `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.webp`
-- Checks filenames for suspicious keywords (e.g., "gun.jpg", "nude.png")
+- Analyzes image content using **GPT-4 Vision** to extract text and describe visual layout, applying semantic matching for advanced deduplication.
 
 ### What Happens on Rejection
 
